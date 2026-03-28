@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: provisioning-service
+  namespace: duckops
+  labels:
+    app: provisioning-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: provisioning-service
+  template:
+    metadata:
+      labels:
+        app: provisioning-service
+    spec:
+      containers:
+        - name: provisioning-service
+          image: k3d-duckops-registry:5111/provisioning-service:latest
+          ports:
+            - containerPort: 4002
+          env:
+            - name: PORT
+              value: "4002"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: duckops-secrets
+                  key: database-url
+            - name: NODE_ENV
+              value: production
+            - name: JENKINS_URL
+              value: "http://jenkins:8080"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4002
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"

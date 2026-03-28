@@ -1,0 +1,72 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+
+interface Item {
+  id: number
+  title: string
+  completed: boolean
+}
+
+export default function Home() {
+  const [items, setItems] = useState<Item[]>([])
+  const [newTitle, setNewTitle] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/items')
+      .then((r) => r.json())
+      .then((data) => { setItems(data); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+
+  const addItem = async () => {
+    if (!newTitle.trim()) return
+    const res = await fetch('/api/items', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: newTitle }),
+    })
+    const item = await res.json()
+    setItems((prev) => [...prev, item])
+    setNewTitle('')
+  }
+
+  return (
+    <main style={{ fontFamily: 'system-ui, sans-serif', maxWidth: 560, margin: '3rem auto', padding: '0 1rem' }}>
+      <h1 style={{ fontSize: '2rem', marginBottom: '0.25rem' }}>{{projectName}}</h1>
+      <p style={{ color: '#64748b', fontSize: '0.875rem', marginBottom: '2rem' }}>
+        Built with Next.js · Deployed by DuckOps
+      </p>
+
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
+        <input
+          value={newTitle}
+          onChange={(e) => setNewTitle(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && addItem()}
+          placeholder="Add an item..."
+          style={{ flex: 1, padding: '0.625rem 0.875rem', borderRadius: 8, border: '1px solid #334155', fontSize: '0.9rem' }}
+        />
+        <button
+          onClick={addItem}
+          style={{ padding: '0.625rem 1.25rem', background: '#0070f3', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer' }}
+        >
+          Add
+        </button>
+      </div>
+
+      {loading ? (
+        <p>Loading...</p>
+      ) : (
+        <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          {items.map((item) => (
+            <li key={item.id} style={{ padding: '0.875rem 1rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+              {item.title}
+            </li>
+          ))}
+          {items.length === 0 && <li style={{ color: '#94a3b8', textAlign: 'center' }}>No items yet.</li>}
+        </ul>
+      )}
+    </main>
+  )
+}

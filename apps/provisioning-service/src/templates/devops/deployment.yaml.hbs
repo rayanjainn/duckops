@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{projectName}}
+  namespace: project-{{projectName}}
+  labels:
+    app: {{projectName}}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{projectName}}
+  template:
+    metadata:
+      labels:
+        app: {{projectName}}
+    spec:
+      containers:
+        - name: {{projectName}}
+          image: k3d-duckops-registry:5111/{{projectName}}:latest
+          ports:
+            - containerPort: {{port}}
+          env:
+            - name: DATABASE_URL
+              value: "postgresql://duckops:duckops123@postgres.project-{{projectName}}.svc.cluster.local:5432/{{projectName}}"
+            - name: PORT
+              value: "{{port}}"
+            - name: NODE_ENV
+              value: "production"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{port}}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{port}}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"

@@ -1,0 +1,16 @@
+import { NextRequest, NextResponse } from 'next/server'
+
+// In-memory store — replace with a real database in production
+let items: { id: number; title: string; completed: boolean }[] = []
+let nextId = 1
+
+export async function GET() {
+  return NextResponse.json(items)
+}
+
+export async function POST(req: NextRequest) {
+  const { title } = await req.json()
+  const item = { id: nextId++, title, completed: false }
+  items.push(item)
+  return NextResponse.json(item, { status: 201 })
+}

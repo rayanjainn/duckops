@@ -1,0 +1,61 @@
+---
+- name: Deploy application to Kubernetes
+  hosts: all
+  connection: local
+  gather_facts: false
+
+  vars:
+    project_name: "{{ project_name }}"
+    namespace: "{{ namespace }}"
+    database_url: "{{ database_url }}"
+    registry: "k3d-duckops-registry:5111"
+    app_port: 3000
+
+  tasks:
+    - name: Ensure namespace exists
+      shell: |
+        kubectl get namespace {{ namespace }} 2>/dev/null || \
+        kubectl create namespace {{ namespace }}
+      changed_when: true
+
+    - name: Apply Kubernetes deployment manifest
+      shell: |
+        kubectl apply -f /tmp/duckops-projects/{{ project_name }}/k8s/deployment.yaml
+      ignore_errors: true
+
+    - name: Apply Kubernetes service manifest
+      shell: |
+        kubectl apply -f /tmp/duckops-projects/{{ project_name }}/k8s/service.yaml
+      ignore_errors: true
+
+    - name: Apply ingress for project
+      shell: |
+        cat <<EOF | kubectl apply -f -
+        apiVersion: networking.k8s.io/v1
+        kind: Ingress
+        metadata:
+          name: {{ project_name }}
+          namespace: {{ namespace }}
+          annotations:
+            nginx.ingress.kubernetes.io/rewrite-target: /
+        spec:
+          rules:
+          - host: {{ project_name }}.localhost
+            http:
+              paths:
+              - path: /
+                pathType: Prefix
+                backend:
+                  service:
+                    name: {{ project_name }}
+                    port:
+                      number: 80
+        EOF
+      ignore_errors: true
+
+    - name: Wait for deployment rollout
+      shell: |
+        kubectl rollout status deployment/{{ project_name }} \
+          -n {{ namespace }} \
+          --timeout=120s
+      ignore_errors: true

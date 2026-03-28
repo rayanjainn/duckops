@@ -1,0 +1,176 @@
+services:
+  # ─── Data Layer ──────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: duckops-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: duckops
+      POSTGRES_PASSWORD: duckops123
+      POSTGRES_DB: duckops
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U duckops"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: duckops-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── CI/CD ───────────────────────────────────────────────────
+  jenkins:
+    build:
+      context: infra/jenkins
+      dockerfile: Dockerfile
+    container_name: duckops-jenkins
+    restart: unless-stopped
+    ports:
+      - "8085:8080"
+      - "50000:50000"
+    volumes:
+      - jenkinsdata:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${HOME}/.kube:/root/.kube-host:ro
+    environment:
+      JAVA_OPTS: "-Djenkins.install.runSetupWizard=false"
+    user: root
+    networks:
+      - default
+      - k3d-duckops
+
+  # ─── Microservices ──────────────────────────────────────────
+  catalog-service:
+    build:
+      context: .
+      dockerfile: apps/catalog-service/Dockerfile
+    container_name: duckops-catalog
+    restart: unless-stopped
+    ports:
+      - "4001:4001"
+    environment:
+      DATABASE_URL: postgresql://duckops:duckops123@postgres:5432/duckops
+      REDIS_URL: redis://redis:6379
+      PORT: "4001"
+      NODE_ENV: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+    develop:
+      watch:
+        - action: rebuild
+          path: apps/catalog-service/src
+
+  provisioning-service:
+    build:
+      context: .
+      dockerfile: apps/provisioning-service/Dockerfile
+    container_name: duckops-provisioning
+    restart: unless-stopped
+    ports:
+      - "4002:4002"
+    environment:
+      DATABASE_URL: postgresql://duckops:duckops123@postgres:5432/duckops
+      REDIS_URL: redis://redis:6379
+      JENKINS_URL: http://jenkins:8080
+      PORT: "4002"
+      NODE_ENV: development
+      DUCKOPS_ENV: local
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
+      JWT_SECRET: ${JWT_SECRET:-change_me_in_production}
+      APP_URL: ${APP_URL:-http://localhost:4000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    volumes:
+      - /tmp/duckops-projects:/tmp/duckops-projects
+      - ./infra:/app/infra
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      postgres:
+        condition: service_healthy
+    develop:
+      watch:
+        - action: rebuild
+          path: apps/provisioning-service/src
+
+  pipeline-service:
+    build:
+      context: .
+      dockerfile: apps/pipeline-service/Dockerfile
+    container_name: duckops-pipeline
+    restart: unless-stopped
+    ports:
+      - "4003:4003"
+    environment:
+      DATABASE_URL: postgresql://duckops:duckops123@postgres:5432/duckops
+      JENKINS_URL: http://jenkins:8080
+      JENKINS_USER: admin
+      JENKINS_TOKEN: ${JENKINS_TOKEN:-}
+      PORT: "4003"
+      NODE_ENV: development
+    depends_on:
+      - postgres
+      - jenkins
+    develop:
+      watch:
+        - action: rebuild
+          path: apps/pipeline-service/src
+
+  health-service:
+    build:
+      context: .
+      dockerfile: apps/health-service/Dockerfile
+    container_name: duckops-health
+    restart: unless-stopped
+    ports:
+      - "4004:4004"
+    environment:
+      DATABASE_URL: postgresql://duckops:duckops123@postgres:5432/duckops
+      PORT: "4004"
+      NODE_ENV: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+    develop:
+      watch:
+        - action: rebuild
+          path: apps/health-service/src
+
+  # ─── API Gateway ─────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: duckops-nginx
+    restart: unless-stopped
+    ports:
+      - "4000:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - catalog-service
+      - provisioning-service
+      - pipeline-service
+      - health-service
+
+volumes:
+  pgdata:
+  redisdata:
+  jenkinsdata:
+
+networks:
+  default:
+  k3d-duckops:
+    external: true

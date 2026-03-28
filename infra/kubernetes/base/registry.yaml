@@ -1,0 +1,8 @@
+# Local Docker registry for K3d
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: registry-config
+  namespace: duckops
+data:
+  registry-url: "k3d-duckops-registry:5111"
