@@ -8,6 +8,7 @@ import {
   getPipelineByProject,
   deletePipeline,
 } from "../services/pipelineService";
+import { getLiveBuildInfo } from "../services/jenkinsService";
 
 export const pipelineRouter = Router();
 
@@ -30,20 +31,68 @@ pipelineRouter.post("/", async (req, res, next) => {
   }
 });
 
-// GET /api/pipelines/:id
-pipelineRouter.get("/:id", async (req, res, next) => {
+// GET /api/pipelines/project/:projectId — must be before /:id
+pipelineRouter.get("/project/:projectId", async (req, res, next) => {
   try {
-    const pipeline = await getPipeline(req.params.id as string);
+    const pipeline = await getPipelineByProject(req.params.projectId as string);
     res.json(pipeline);
   } catch (err) {
     next(err);
   }
 });
 
-// GET /api/pipelines/project/:projectId
-pipelineRouter.get("/project/:projectId", async (req, res, next) => {
+// GET /api/pipelines/project/:projectId/live — SSE stream of live build info
+pipelineRouter.get("/project/:projectId/live", async (req, res) => {
+  const pipeline = await getPipelineByProject(req.params.projectId as string).catch(() => null);
+  if (!pipeline) {
+    res.status(404).json({ error: "No pipeline for project" });
+    return;
+  }
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+
+  const send = (data: unknown) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  const poll = async () => {
+    try {
+      const info = await getLiveBuildInfo(pipeline.jenkinsJobName);
+      send(info);
+    } catch {
+      send({ error: "jenkins_unreachable" });
+    }
+  };
+
+  await poll();
+  const interval = setInterval(poll, 2000);
+
+  req.on("close", () => {
+    clearInterval(interval);
+    res.end();
+  });
+});
+
+// GET /api/pipelines/project/:projectId/snapshot — one-shot live build info
+pipelineRouter.get("/project/:projectId/snapshot", async (req, res, next) => {
   try {
     const pipeline = await getPipelineByProject(req.params.projectId as string);
+    if (!pipeline) { res.json(null); return; }
+    const info = await getLiveBuildInfo(pipeline.jenkinsJobName);
+    res.json(info);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/pipelines/:id
+pipelineRouter.get("/:id", async (req, res, next) => {
+  try {
+    const pipeline = await getPipeline(req.params.id as string);
     res.json(pipeline);
   } catch (err) {
     next(err);

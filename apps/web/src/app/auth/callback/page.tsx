@@ -28,9 +28,9 @@ export default function AuthCallbackPage() {
   }, [searchParams, router, setAuthFromCallback]);
 
   return (
-    <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center gap-4">
-      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500" />
-      <p className="text-gray-400 text-sm">Signing you in...</p>
+    <div className="min-h-screen bg-surface flex flex-col items-center justify-center gap-4">
+      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-amber-500" />
+      <p className="text-muted-2 text-sm">Signing you in...</p>
     </div>
   );
 }

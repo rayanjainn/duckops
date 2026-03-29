@@ -1,5 +1,3 @@
-// packages/db/prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,45 +7,108 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── USER MANAGEMENT ────────────────────────────────────────────
-
 model User {
   id                String    @id @default(cuid())
   email             String    @unique
   name              String
   role              Role      @default(DEVELOPER)
-
-  // GitHub OAuth
   githubId          String    @unique
   githubUsername    String
-  githubAccessToken String    // stored encrypted at rest
+  githubAccessToken String
   avatarUrl         String?
-
-  projects          Project[]
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+  projects          Project[]
+}
+
+model TemplateOption {
+  id             String   @id @default(cuid())
+  layer          Layer
+  name           String
+  displayName    String
+  description    String?
+  icon           String?
+  version        String
+  compatibleWith Json
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  @@unique([layer, name])
+}
+
+model Project {
+  id                 String        @id @default(cuid())
+  name               String        @unique
+  displayName        String
+  description        String?
+  language           String
+  framework          String
+  database           String
+  orm                String
+  status             ProjectStatus @default(INITIALIZING)
+  statusMessage      String?
+  namespace          String?
+  liveUrl            String?
+  internalPort       Int?
+  externalPort       Int?
+  githubRepoUrl      String?
+  githubRepoName     String?
+  githubRepoFullName String?
+  userId             String
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  deployments        Deployment[]
+  healthChecks       HealthCheck[]
+  pipeline           Pipeline?
+  user               User          @relation(fields: [userId], references: [id])
+}
+
+model Pipeline {
+  id              String         @id @default(cuid())
+  projectId       String         @unique
+  jenkinsJobName  String
+  jenkinsJobUrl   String?
+  gitRepoUrl      String?
+  branch          String         @default("main")
+  status          PipelineStatus @default(CREATING)
+  lastBuildNumber Int?
+  lastBuildStatus String?
+  lastBuildAt     DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  project         Project        @relation(fields: [projectId], references: [id])
+}
+
+model Deployment {
+  id          String           @id @default(cuid())
+  projectId   String
+  version     String
+  imageTag    String
+  status      DeploymentStatus @default(PENDING)
+  triggeredBy String
+  buildLogs   String?
+  deployLogs  String?
+  startedAt   DateTime         @default(now())
+  completedAt DateTime?
+  project     Project          @relation(fields: [projectId], references: [id])
+}
+
+model HealthCheck {
+  id           String       @id @default(cuid())
+  projectId    String
+  status       HealthStatus
+  responseTime Int?
+  statusCode   Int?
+  message      String?
+  checkedAt    DateTime     @default(now())
+  project      Project      @relation(fields: [projectId], references: [id])
+
+  @@index([projectId, checkedAt])
 }
 
 enum Role {
   ADMIN
   DEVELOPER
-}
-
-// ─── TEMPLATE SYSTEM ────────────────────────────────────────────
-
-model TemplateOption {
-  id            String   @id @default(cuid())
-  layer         Layer
-  name          String
-  displayName   String
-  description   String?
-  icon          String?
-  version       String
-  compatibleWith Json
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-
-  @@unique([layer, name])
 }
 
 enum Layer {
@@ -57,50 +118,10 @@ enum Layer {
   ORM
 }
 
-// ─── PROJECT MANAGEMENT ─────────────────────────────────────────
-
-model Project {
-  id            String        @id @default(cuid())
-  name          String        @unique
-  displayName   String
-  description   String?
-
-  // Tech stack choices
-  language      String
-  framework     String
-  database      String
-  orm           String
-
-  // Status tracking
-  status        ProjectStatus @default(INITIALIZING)
-  statusMessage String?
-
-  // Infrastructure details
-  namespace     String?
-  liveUrl       String?
-  internalPort  Int?
-  externalPort  Int?
-
-  // GitHub repo (created during provisioning)
-  githubRepoUrl    String?   // "https://github.com/username/my-todo-api"
-  githubRepoName   String?   // "my-todo-api"
-  githubRepoFullName String? // "username/my-todo-api"
-
-  // Relationships
-  userId        String
-  user          User          @relation(fields: [userId], references: [id])
-  pipeline      Pipeline?
-  deployments   Deployment[]
-  healthChecks  HealthCheck[]
-
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-}
-
 enum ProjectStatus {
   INITIALIZING
   SCAFFOLDING
-  CREATING_REPO   // Creating GitHub repo + pushing code
+  CREATING_REPO
   PROVISIONING
   CONFIGURING
   PIPELINE_READY
@@ -111,52 +132,11 @@ enum ProjectStatus {
   FAILED
 }
 
-// ─── CI/CD PIPELINE ─────────────────────────────────────────────
-
-model Pipeline {
-  id             String         @id @default(cuid())
-  projectId      String         @unique
-  project        Project        @relation(fields: [projectId], references: [id])
-
-  jenkinsJobName String
-  jenkinsJobUrl  String?
-  gitRepoUrl     String?
-  branch         String         @default("main")
-
-  status         PipelineStatus @default(CREATING)
-  lastBuildNumber Int?
-  lastBuildStatus String?
-  lastBuildAt    DateTime?
-
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-}
-
 enum PipelineStatus {
   CREATING
   ACTIVE
   PAUSED
   FAILED
-}
-
-// ─── DEPLOYMENT HISTORY ─────────────────────────────────────────
-
-model Deployment {
-  id          String           @id @default(cuid())
-  projectId   String
-  project     Project          @relation(fields: [projectId], references: [id])
-
-  version     String
-  imageTag    String
-
-  status      DeploymentStatus @default(PENDING)
-  triggeredBy String
-
-  buildLogs   String?          @db.Text
-  deployLogs  String?          @db.Text
-
-  startedAt   DateTime         @default(now())
-  completedAt DateTime?
 }
 
 enum DeploymentStatus {
@@ -167,23 +147,6 @@ enum DeploymentStatus {
   SUCCESS
   FAILED
   ROLLED_BACK
-}
-
-// ─── HEALTH MONITORING ─────────────────────────────────────────
-
-model HealthCheck {
-  id           String       @id @default(cuid())
-  projectId    String
-  project      Project      @relation(fields: [projectId], references: [id])
-
-  status       HealthStatus
-  responseTime Int?
-  statusCode   Int?
-  message      String?
-
-  checkedAt    DateTime     @default(now())
-
-  @@index([projectId, checkedAt])
 }
 
 enum HealthStatus {

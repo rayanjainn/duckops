@@ -262,6 +262,84 @@ export async function getLastBuildInfo(
   return response.json() as any;
 }
 
+export interface BuildStage {
+  id: string;
+  name: string;
+  status: "IN_PROGRESS" | "SUCCESS" | "FAILED" | "NOT_EXECUTED" | "PAUSED";
+  durationMillis: number;
+}
+
+export interface LiveBuildInfo {
+  building: boolean;
+  number: number | null;
+  result: string | null;
+  url: string | null;
+  stages: BuildStage[];
+  consoleLines: string[];
+  estimatedDurationMs: number;
+  durationMs: number;
+}
+
+export async function getLiveBuildInfo(jobName: string): Promise<LiveBuildInfo> {
+  const headers: Record<string, string> = {};
+  if (authHeader) headers.Authorization = authHeader;
+
+  // Get last build summary
+  const buildRes = await fetch(
+    `${JENKINS_URL}/job/${encodeURIComponent(jobName)}/lastBuild/api/json?tree=number,building,result,url,estimatedDuration,duration`,
+    { headers },
+  );
+
+  if (!buildRes.ok) {
+    return { building: false, number: null, result: null, url: null, stages: [], consoleLines: [], estimatedDurationMs: 0, durationMs: 0 };
+  }
+
+  const build = await buildRes.json() as {
+    number: number; building: boolean; result: string | null;
+    url: string; estimatedDuration: number; duration: number;
+  };
+
+  // Get stages via workflow API
+  const stagesRes = await fetch(
+    `${JENKINS_URL}/job/${encodeURIComponent(jobName)}/${build.number}/wfapi/describe`,
+    { headers },
+  ).catch(() => null);
+
+  let stages: BuildStage[] = [];
+  if (stagesRes?.ok) {
+    const wf = await stagesRes.json() as { stages?: { id: string; name: string; status: string; durationMillis: number }[] };
+    stages = (wf.stages || []).map((s) => ({
+      id: s.id,
+      name: s.name,
+      status: s.status as BuildStage["status"],
+      durationMillis: s.durationMillis,
+    }));
+  }
+
+  // Get last 40 lines of console output
+  const consoleRes = await fetch(
+    `${JENKINS_URL}/job/${encodeURIComponent(jobName)}/${build.number}/consoleText`,
+    { headers },
+  ).catch(() => null);
+
+  let consoleLines: string[] = [];
+  if (consoleRes?.ok) {
+    const text = await consoleRes.text();
+    consoleLines = text.split("\n").filter(Boolean).slice(-40);
+  }
+
+  return {
+    building: build.building,
+    number: build.number,
+    result: build.result,
+    url: build.url,
+    stages,
+    consoleLines,
+    estimatedDurationMs: build.estimatedDuration,
+    durationMs: build.duration,
+  };
+}
+
 export async function deleteJenkinsPipeline(jobName: string): Promise<void> {
   await fetch(
     `${JENKINS_URL}/job/${encodeURIComponent(jobName)}/doDelete`,

@@ -47,22 +47,26 @@ async function scaffoldFrontend(
   outputDir: string,
 ) {
   const fw = input.framework;
+  const lang = input.language; // "typescript" or "javascript"
+  const isTS = lang === "typescript";
+  const ext = isTS ? "ts" : "js";
+  const jsxExt = isTS ? "tsx" : "jsx";
 
   if (fw === "react") {
-    const appTpl = await loadTemplate("frontend/react/App.tsx.hbs");
-    await writeFile(path.join(outputDir, "src", "App.tsx"), appTpl(ctx));
+    const appTpl = await loadTemplate(`frontend/react/${lang}/App.${jsxExt}.hbs`);
+    await writeFile(path.join(outputDir, "src", `App.${jsxExt}`), appTpl(ctx));
 
-    const cssTpl = await loadTemplate("frontend/react/App.css.hbs");
+    const cssTpl = await loadTemplate(`frontend/react/typescript/App.css.hbs`);
     await writeFile(path.join(outputDir, "src", "App.css"), cssTpl(ctx));
 
-    const mainTpl = await loadTemplate("frontend/react/main.tsx.hbs");
-    await writeFile(path.join(outputDir, "src", "main.tsx"), mainTpl(ctx));
+    const mainTpl = await loadTemplate(`frontend/react/${lang}/main.${jsxExt}.hbs`);
+    await writeFile(path.join(outputDir, "src", `main.${jsxExt}`), mainTpl(ctx));
 
-    const htmlTpl = await loadTemplate("frontend/react/index.html.hbs");
+    const htmlTpl = await loadTemplate(`frontend/react/${lang}/index.html.hbs`);
     await writeFile(path.join(outputDir, "index.html"), htmlTpl(ctx));
 
-    const viteTpl = await loadTemplate("frontend/react/vite.config.ts.hbs");
-    await writeFile(path.join(outputDir, "vite.config.ts"), viteTpl(ctx));
+    const viteTpl = await loadTemplate(`frontend/react/typescript/vite.config.ts.hbs`);
+    await writeFile(path.join(outputDir, `vite.config.${ext}`), viteTpl(ctx));
 
     const dockerTpl = await loadTemplate("devops/Dockerfile.react.hbs");
     await writeFile(path.join(outputDir, "Dockerfile"), dockerTpl(ctx));
@@ -70,18 +74,28 @@ async function scaffoldFrontend(
     const nginxTpl = await loadTemplate("devops/nginx.conf.hbs");
     await writeFile(path.join(outputDir, "nginx.conf"), nginxTpl(ctx));
 
+    if (isTS) {
+      const tsConfigTpl = await loadTemplate("devops/tsconfig.frontend.json.hbs");
+      await writeFile(path.join(outputDir, "tsconfig.json"), tsConfigTpl(ctx));
+      const tsNodeConfigTpl = await loadTemplate("devops/tsconfig.node.json.hbs");
+      await writeFile(path.join(outputDir, "tsconfig.node.json"), tsNodeConfigTpl(ctx));
+    }
   } else if (fw === "vue") {
-    const appTpl = await loadTemplate("frontend/vue/App.vue.hbs");
+    // Vue uses .vue files which work for both but with script setup lang="ts"
+    const appPath = isTS
+      ? "frontend/vue/typescript/App.vue.hbs"
+      : "frontend/vue/javascript/App.vue.hbs";
+    const appTpl = await loadTemplate(appPath);
     await writeFile(path.join(outputDir, "src", "App.vue"), appTpl(ctx));
 
-    const mainTpl = await loadTemplate("frontend/vue/main.ts.hbs");
-    await writeFile(path.join(outputDir, "src", "main.ts"), mainTpl(ctx));
+    const mainTpl = await loadTemplate(`frontend/vue/${lang}/main.${ext}.hbs`);
+    await writeFile(path.join(outputDir, "src", `main.${ext}`), mainTpl(ctx));
 
-    const htmlTpl = await loadTemplate("frontend/vue/index.html.hbs");
+    const htmlTpl = await loadTemplate(`frontend/vue/${lang}/index.html.hbs`);
     await writeFile(path.join(outputDir, "index.html"), htmlTpl(ctx));
 
-    const viteTpl = await loadTemplate("frontend/vue/vite.config.ts.hbs");
-    await writeFile(path.join(outputDir, "vite.config.ts"), viteTpl(ctx));
+    const viteTpl = await loadTemplate(`frontend/vue/typescript/vite.config.ts.hbs`);
+    await writeFile(path.join(outputDir, `vite.config.${ext}`), viteTpl(ctx));
 
     const dockerTpl = await loadTemplate("devops/Dockerfile.vue.hbs");
     await writeFile(path.join(outputDir, "Dockerfile"), dockerTpl(ctx));
@@ -89,27 +103,44 @@ async function scaffoldFrontend(
     const nginxTpl = await loadTemplate("devops/nginx.conf.hbs");
     await writeFile(path.join(outputDir, "nginx.conf"), nginxTpl(ctx));
 
+    if (isTS) {
+      const tsConfigTpl = await loadTemplate("devops/tsconfig.frontend.json.hbs");
+      await writeFile(path.join(outputDir, "tsconfig.json"), tsConfigTpl(ctx));
+      const tsNodeConfigTpl = await loadTemplate("devops/tsconfig.node.json.hbs");
+      await writeFile(path.join(outputDir, "tsconfig.node.json"), tsNodeConfigTpl(ctx));
+    }
   } else if (fw === "nextjs") {
-    const pageTpl = await loadTemplate("frontend/nextjs/page.tsx.hbs");
+    // Next.js fallback to typescript templates for now as they are smarter
+    const tLang = "typescript";
+    const pageTpl = await loadTemplate(`frontend/nextjs/${tLang}/page.tsx.hbs`);
     await writeFile(path.join(outputDir, "app", "page.tsx"), pageTpl(ctx));
 
-    const layoutTpl = await loadTemplate("frontend/nextjs/layout.tsx.hbs");
+    const layoutTpl = await loadTemplate(`frontend/nextjs/${tLang}/layout.tsx.hbs`);
     await writeFile(path.join(outputDir, "app", "layout.tsx"), layoutTpl(ctx));
 
-    const itemsTpl = await loadTemplate("frontend/nextjs/api-items.ts.hbs");
-    await writeFile(path.join(outputDir, "app", "api", "items", "route.ts"), itemsTpl(ctx));
+    const itemsTpl = await loadTemplate(`frontend/nextjs/${tLang}/api-items.ts.hbs`);
+    await writeFile(
+      path.join(outputDir, "app", "api", "items", "route.ts"),
+      itemsTpl(ctx),
+    );
 
-    const healthTpl = await loadTemplate("frontend/nextjs/api-health.ts.hbs");
-    await writeFile(path.join(outputDir, "app", "api", "health", "route.ts"), healthTpl(ctx));
+    const healthTpl = await loadTemplate(`frontend/nextjs/${tLang}/api-health.ts.hbs`);
+    await writeFile(
+      path.join(outputDir, "app", "api", "health", "route.ts"),
+      healthTpl(ctx),
+    );
 
-    const configTpl = await loadTemplate("frontend/nextjs/next.config.ts.hbs");
+    const configTpl = await loadTemplate(`frontend/nextjs/${tLang}/next.config.ts.hbs`);
     await writeFile(path.join(outputDir, "next.config.ts"), configTpl(ctx));
 
-    // Next.js needs a public dir
     await fs.mkdir(path.join(outputDir, "public"), { recursive: true });
 
     const dockerTpl = await loadTemplate("devops/Dockerfile.nextjs.hbs");
     await writeFile(path.join(outputDir, "Dockerfile"), dockerTpl(ctx));
+
+    // Next.js always needs tsconfig even if JS (until we make JS templates)
+    const tsConfigTpl = await loadTemplate("devops/tsconfig.frontend.json.hbs");
+    await writeFile(path.join(outputDir, "tsconfig.json"), tsConfigTpl(ctx));
   }
 
   // All frontends get K8s manifests and Jenkinsfile
@@ -138,15 +169,18 @@ async function scaffoldBackend(
   ctx: Record<string, unknown>,
   outputDir: string,
 ) {
+  const isTS = input.language === "typescript";
+  const ext = isTS ? "ts" : "js";
+
   // 1. Main application file
-  const appTpl = await loadTemplate(`nodejs/${input.framework}/index.ts.hbs`);
-  await writeFile(path.join(outputDir, "src", "index.ts"), appTpl(ctx));
+  const appTpl = await loadTemplate(`backend/${input.language}/${input.framework}/index.${ext}.hbs`);
+  await writeFile(path.join(outputDir, "src", `index.${ext}`), appTpl(ctx));
 
   // 2. Database client
   const dbTpl = await loadTemplate(
-    `databases/${input.database}/${input.orm}/client.ts.hbs`,
+    `databases/${input.database}/${input.orm}/client.${ext}.hbs`,
   );
-  await writeFile(path.join(outputDir, "src", "db.ts"), dbTpl(ctx));
+  await writeFile(path.join(outputDir, "src", `db.${ext}`), dbTpl(ctx));
 
   // 3. Prisma schema if needed
   if (input.orm === "prisma") {
@@ -159,9 +193,9 @@ async function scaffoldBackend(
   // 4. Drizzle schema if needed
   if (input.orm === "drizzle") {
     const schemaTpl = await loadTemplate(
-      `databases/${input.database}/drizzle/schema.ts.hbs`,
+      `databases/${input.database}/drizzle/schema.${ext}.hbs`,
     );
-    await writeFile(path.join(outputDir, "src", "schema.ts"), schemaTpl(ctx));
+    await writeFile(path.join(outputDir, "src", `schema.${ext}`), schemaTpl(ctx));
   }
 
   // 5. Dockerfile
@@ -185,11 +219,13 @@ async function scaffoldBackend(
     JSON.stringify(generateBackendPackageJson(input), null, 2),
   );
 
-  // 9. tsconfig.json
-  await writeFile(
-    path.join(outputDir, "tsconfig.json"),
-    JSON.stringify(generateBackendTsConfig(), null, 2),
-  );
+  // 9. tsconfig.json (only for TS)
+  if (isTS) {
+    await writeFile(
+      path.join(outputDir, "tsconfig.json"),
+      JSON.stringify(generateBackendTsConfig(), null, 2),
+    );
+  }
 
   // 10. .env.example
   await writeFile(path.join(outputDir, ".env.example"), generateEnvExample(input));
@@ -208,60 +244,77 @@ async function writeFile(filePath: string, content: string) {
 
 function generateFrontendPackageJson(input: ScaffoldInput) {
   const fw = input.framework;
+  const isTS = input.language === "typescript";
 
   if (fw === "react") {
+    const devDeps: Record<string, string> = {
+      "@vitejs/plugin-react": "^4.3.0",
+      vite: "^6.0.0",
+    };
+    if (isTS) {
+      devDeps.typescript = "^5.7.0";
+      devDeps["@types/react"] = "^18.3.0";
+      devDeps["@types/react-dom"] = "^18.3.0";
+      devDeps["@types/node"] = "^22.0.0";
+    }
+
     return {
-      name: input.projectName,
+      name: input.projectName.toLowerCase().replace(/\s+/g, "-"),
       version: "1.0.0",
       type: "module",
       scripts: {
         dev: "vite",
-        build: "tsc -b && vite build",
+        build: isTS ? "tsc -b && vite build" : "vite build",
         preview: "vite preview",
-        test: "vitest run",
       },
       dependencies: {
         react: "^18.3.0",
         "react-dom": "^18.3.0",
       },
-      devDependencies: {
-        "@types/react": "^18.3.0",
-        "@types/react-dom": "^18.3.0",
-        "@vitejs/plugin-react": "^4.3.0",
-        typescript: "^5.7.0",
-        vite: "^6.0.0",
-        vitest: "^2.1.0",
-      },
+      devDependencies: devDeps,
     };
   }
 
   if (fw === "vue") {
+    const devDeps: Record<string, string> = {
+      "@vitejs/plugin-vue": "^5.2.0",
+      vite: "^6.0.0",
+    };
+    if (isTS) {
+      devDeps.typescript = "^5.7.0";
+      devDeps["vue-tsc"] = "^2.1.0";
+      devDeps["@types/node"] = "^22.0.0";
+    }
+
     return {
-      name: input.projectName,
+      name: input.projectName.toLowerCase().replace(/\s+/g, "-"),
       version: "1.0.0",
       type: "module",
       scripts: {
         dev: "vite",
-        build: "vue-tsc -b && vite build",
+        build: isTS ? "vue-tsc -b && vite build" : "vite build",
         preview: "vite preview",
-        test: "vitest run",
       },
       dependencies: {
         vue: "^3.5.0",
       },
-      devDependencies: {
-        "@vitejs/plugin-vue": "^5.2.0",
-        "vue-tsc": "^2.1.0",
-        typescript: "^5.7.0",
-        vite: "^6.0.0",
-        vitest: "^2.1.0",
-      },
+      devDependencies: devDeps,
     };
   }
 
   // nextjs
+  const nextDevDeps: Record<string, string> = {
+    vitest: "^2.1.0",
+  };
+  if (isTS) {
+    nextDevDeps.typescript = "^5.7.0";
+    nextDevDeps["@types/node"] = "^22.0.0";
+    nextDevDeps["@types/react"] = "^18.3.0";
+    nextDevDeps["@types/react-dom"] = "^18.3.0";
+  }
+
   return {
-    name: input.projectName,
+    name: input.projectName.toLowerCase().replace(/\s+/g, "-"),
     version: "1.0.0",
     scripts: {
       dev: "next dev",
@@ -274,17 +327,14 @@ function generateFrontendPackageJson(input: ScaffoldInput) {
       react: "^18.3.0",
       "react-dom": "^18.3.0",
     },
-    devDependencies: {
-      "@types/node": "^22.0.0",
-      "@types/react": "^18.3.0",
-      "@types/react-dom": "^18.3.0",
-      typescript: "^5.7.0",
-      vitest: "^2.1.0",
-    },
+    devDependencies: nextDevDeps,
   };
 }
 
 function generateBackendPackageJson(input: ScaffoldInput) {
+  const isTS = input.language === "typescript";
+  const ext = isTS ? "ts" : "js";
+
   const baseDeps: Record<string, string> = {
     express: "^5.0.0",
     cors: "^2.8.5",
@@ -308,24 +358,27 @@ function generateBackendPackageJson(input: ScaffoldInput) {
   };
 
   const devDeps: Record<string, string> = {
-    typescript: "^5.7.0",
     tsx: "^4.19.0",
-    "@types/node": "^22.0.0",
     vitest: "^2.1.0",
   };
 
-  if (input.framework === "express") {
-    devDeps["@types/express"] = "^5.0.0";
-    devDeps["@types/cors"] = "^2.8.17";
+  if (isTS) {
+    devDeps.typescript = "^5.7.0";
+    devDeps["@types/node"] = "^22.0.0";
+    if (input.framework === "express") {
+      devDeps["@types/express"] = "^5.0.0";
+      devDeps["@types/cors"] = "^2.8.17";
+    }
   }
 
   return {
     name: input.projectName,
     version: "1.0.0",
+    type: "module",
     scripts: {
-      dev: "tsx watch src/index.ts",
-      build: "tsc",
-      start: "node dist/index.js",
+      dev: `tsx watch src/index.${ext}`,
+      build: isTS ? "tsc" : "echo 'Nothing to build'",
+      start: `node ${isTS ? "dist" : "src"}/index.js`,
       test: "vitest run",
     },
     dependencies: { ...baseDeps, ...(ormDeps[input.orm] || {}) },
@@ -337,7 +390,8 @@ function generateBackendTsConfig() {
   return {
     compilerOptions: {
       target: "ES2022",
-      module: "commonjs",
+      module: "ESNext",
+      moduleResolution: "node",
       lib: ["ES2022"],
       outDir: "./dist",
       rootDir: "./src",

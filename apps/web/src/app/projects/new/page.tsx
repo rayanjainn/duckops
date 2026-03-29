@@ -3,10 +3,10 @@ import { CreateProjectForm } from "@/components/projects/CreateProjectForm";
 
 export default function NewProjectPage() {
   return (
-    <div>
+    <div className="min-h-screen bg-surface">
       <Header
-        title="Create New Project"
-        description="Pick your tech stack and DuckOps handles the rest"
+        title="New Project"
+        description="Pick your tech stack — DuckOps handles scaffolding, deployment, and CI/CD"
       />
       <CreateProjectForm />
     </div>

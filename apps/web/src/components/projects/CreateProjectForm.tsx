@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { useCreateProject } from "@/hooks/useProjects";
 import { useTemplates, useCompatibleTemplates } from "@/hooks/useTemplates";
@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { TemplateOption } from "@duckops/shared-types";
 import { cn } from "@/lib/utils";
-import { CheckCircle, Circle } from "lucide-react";
+import { Check, Rocket, AlertCircle } from "lucide-react";
 
 function OptionButton({
   option,
@@ -26,23 +26,41 @@ function OptionButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "relative p-4 rounded-lg border-2 text-left transition-all hover:shadow-sm",
+        "relative p-4 rounded-xl border text-left transition-all",
         selected
-          ? "border-blue-500 bg-blue-50"
-          : "border-gray-200 hover:border-blue-300",
+          ? "border-amber-500 bg-accent-muted shadow-lg shadow-amber-900/20"
+          : "border-border-2 bg-surface-3/50 hover:border-muted hover:bg-surface-3",
       )}
     >
       {selected && (
-        <CheckCircle className="absolute top-2 right-2 h-4 w-4 text-blue-500" />
+        <div className="absolute top-2.5 right-2.5 w-5 h-5 bg-amber-600 rounded-full flex items-center justify-center">
+          <Check className="h-3 w-3 text-white" />
+        </div>
       )}
-      <div className="font-medium text-sm">{option.displayName}</div>
-      <div className="text-xs text-gray-500 mt-1">v{option.version}</div>
+      <div className={cn("font-semibold text-sm", selected ? "text-amber-300" : "text-foreground")}>
+        {option.displayName}
+      </div>
+      <div className="text-xs text-muted mt-0.5 font-mono">v{option.version}</div>
       {option.description && (
-        <div className="text-xs text-gray-400 mt-1 line-clamp-2">
+        <div className="text-xs text-muted mt-2 line-clamp-2 leading-relaxed">
           {option.description}
         </div>
       )}
     </button>
+  );
+}
+
+function SectionHeader({ step, title, done }: { step: number; title: string; done?: boolean }) {
+  return (
+    <div className="flex items-center gap-3 mb-4">
+      <div className={cn(
+        "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0",
+        done ? "bg-emerald-600 text-white" : "bg-amber-600 text-white"
+      )}>
+        {done ? <Check className="h-3.5 w-3.5" /> : step}
+      </div>
+      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+    </div>
   );
 }
 
@@ -67,13 +85,18 @@ export function CreateProjectForm() {
   if (form.language) compatParams.language = form.language;
   if (form.database) compatParams.database = form.database;
 
-  const { data: compatOptions } = useCompatibleTemplates(compatParams);
-  const options = Object.keys(compatParams).length > 0 ? compatOptions : allOptions;
+  const { data: compatOptions, isLoading: isCompatLoading } = useCompatibleTemplates(compatParams);
+  // Fallback to allOptions if compatOptions is not yet available to prevent UI "stuck" state while loading
+  const options = (Object.keys(compatParams).length > 0 && compatOptions) ? compatOptions : allOptions;
 
   const handleSelect = (layer: string, value: string) => {
     setForm((prev) => {
       const next = { ...prev, [layer.toLowerCase()]: value };
-      if (layer === "language") { next.framework = ""; next.database = ""; next.orm = ""; }
+      if (layer === "language") {
+        next.framework = "";
+        next.database = "";
+        next.orm = "";
+      }
       if (layer === "framework") {
         if (FRONTEND_FRAMEWORKS.has(value)) {
           next.database = "none";
@@ -113,51 +136,46 @@ export function CreateProjectForm() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      <div className="max-w-2xl mx-auto p-8 space-y-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="skeleton h-32 rounded-xl" />
+        ))}
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 p-8">
+    <div className="max-w-2xl mx-auto space-y-4 p-8">
       {/* Project Info */}
       <Card>
-        <CardHeader>
-          <CardTitle>Project Info</CardTitle>
+        <CardHeader className="pb-4">
+          <SectionHeader step={1} title="Project Details" done={!!form.displayName} />
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="displayName">Project Name *</Label>
+            <Label htmlFor="displayName">Project Name</Label>
             <Input
               id="displayName"
-              placeholder="My Todo API"
+              placeholder="my-api"
               value={form.displayName}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, displayName: e.target.value }))
-              }
+              onChange={(e) => setForm((p) => ({ ...p, displayName: e.target.value }))}
             />
             {form.displayName && (
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-muted">
                 Slug:{" "}
-                <span className="font-mono">
-                  {form.displayName
-                    .toLowerCase()
-                    .replace(/[^a-z0-9]+/g, "-")
-                    .replace(/^-|-$/g, "")}
+                <span className="font-mono text-muted-2">
+                  {form.displayName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}
                 </span>
               </p>
             )}
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="description">Description (optional)</Label>
+            <Label htmlFor="description">Description <span className="text-muted font-normal">(optional)</span></Label>
             <Input
               id="description"
-              placeholder="A simple REST API for managing todos"
+              placeholder="A simple REST API"
               value={form.description}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, description: e.target.value }))
-              }
+              onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
             />
           </div>
         </CardContent>
@@ -165,12 +183,13 @@ export function CreateProjectForm() {
 
       {/* Language */}
       <Card>
-        <CardHeader>
-          <CardTitle>Language</CardTitle>
+        <CardHeader className="pb-4">
+          <SectionHeader step={2} title="Language" done={!!form.language} />
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-3">
-            {options?.LANGUAGE?.map((opt) => (
+            {/* Always use allOptions for languages so user can switch between TS and JS freely */}
+            {allOptions?.LANGUAGE?.map((opt) => (
               <OptionButton
                 key={opt.name}
                 option={opt}
@@ -183,103 +202,119 @@ export function CreateProjectForm() {
       </Card>
 
       {/* Framework */}
-      {form.language && options?.FRAMEWORK && options.FRAMEWORK.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Framework</CardTitle>
+      {(form.language) && (
+        <Card className={cn(isCompatLoading && "opacity-50 pointer-events-none")}>
+          <CardHeader className="pb-4">
+            <SectionHeader step={3} title="Framework" done={!!form.framework} />
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-3">
-              {options.FRAMEWORK.map((opt) => (
-                <OptionButton
-                  key={opt.name}
-                  option={opt}
-                  selected={form.framework === opt.name}
-                  onClick={() => handleSelect("framework", opt.name)}
-                />
-              ))}
-            </div>
+            {options?.FRAMEWORK && options.FRAMEWORK.length > 0 ? (
+              <div className="grid grid-cols-2 gap-3">
+                {options.FRAMEWORK.map((opt) => (
+                  <OptionButton
+                    key={opt.name}
+                    option={opt}
+                    selected={form.framework === opt.name}
+                    onClick={() => handleSelect("framework", opt.name)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="py-8 text-center bg-surface-2 rounded-xl border border-dashed border-border">
+                <p className="text-sm text-muted">Loading compatible frameworks...</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
 
-      {/* Database — hidden for frontend frameworks */}
+      {/* Database */}
       {form.framework && !isFrontend && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Database</CardTitle>
+        <Card className={cn(isCompatLoading && "opacity-50 pointer-events-none")}>
+          <CardHeader className="pb-4">
+            <SectionHeader step={4} title="Database" done={!!form.database} />
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-3">
-              {options?.DATABASE?.filter((o) => o.name !== "none").map((opt) => (
-                <OptionButton
-                  key={opt.name}
-                  option={opt}
-                  selected={form.database === opt.name}
-                  onClick={() => handleSelect("database", opt.name)}
-                />
-              ))}
-            </div>
+            {options?.DATABASE && options.DATABASE.filter((o: any) => o.name !== "none").length > 0 ? (
+              <div className="grid grid-cols-2 gap-3">
+                {options.DATABASE.filter((o: any) => o.name !== "none").map((opt: any) => (
+                  <OptionButton
+                    key={opt.name}
+                    option={opt}
+                    selected={form.database === opt.name}
+                    onClick={() => handleSelect("database", opt.name)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="py-8 text-center bg-surface-2 rounded-xl border border-dashed border-border">
+                <p className="text-sm text-muted">Loading compatible databases...</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
 
-      {/* ORM — hidden for frontend frameworks */}
-      {form.database && !isFrontend && (
-        <Card>
-          <CardHeader>
-            <CardTitle>ORM / Query Layer</CardTitle>
+      {/* ORM */}
+      {form.database && !isFrontend && form.database !== "none" && (
+        <Card className={cn(isCompatLoading && "opacity-50 pointer-events-none")}>
+          <CardHeader className="pb-4">
+            <SectionHeader step={5} title="ORM / Query Layer" done={!!form.orm} />
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-3 gap-3">
-              {options?.ORM?.filter((o) => o.name !== "none").map((opt) => (
-                <OptionButton
-                  key={opt.name}
-                  option={opt}
-                  selected={form.orm === opt.name}
-                  onClick={() => handleSelect("orm", opt.name)}
-                />
-              ))}
-            </div>
+            {options?.ORM && options.ORM.filter((o: any) => o.name !== "none").length > 0 ? (
+              <div className="grid grid-cols-3 gap-3">
+                {options.ORM.filter((o: any) => o.name !== "none").map((opt: any) => (
+                  <OptionButton
+                    key={opt.name}
+                    option={opt}
+                    selected={form.orm === opt.name}
+                    onClick={() => handleSelect("orm", opt.name)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="py-8 text-center bg-surface-2 rounded-xl border border-dashed border-border">
+                <p className="text-sm text-muted">Loading compatible ORMs...</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
 
       {/* Summary + Submit */}
       {isReady && (
-        <Card className="border-blue-200 bg-blue-50">
-          <CardHeader>
-            <CardTitle>Ready to Create</CardTitle>
+        <Card className="border-accent-border bg-accent-muted">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm text-amber-300">Ready to deploy</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <span className="text-gray-600">Language:</span>
-              <span className="font-medium capitalize">{form.language}</span>
-              <span className="text-gray-600">Framework:</span>
-              <span className="font-medium capitalize">{form.framework}</span>
-              {!isFrontend && (
-                <>
-                  <span className="text-gray-600">Database:</span>
-                  <span className="font-medium capitalize">{form.database}</span>
-                  <span className="text-gray-600">ORM:</span>
-                  <span className="font-medium capitalize">{form.orm}</span>
-                </>
-              )}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+              {[
+                { label: "Language", value: form.language },
+                { label: "Framework", value: form.framework },
+                ...(!isFrontend ? [
+                  { label: "Database", value: form.database },
+                  { label: "ORM", value: form.orm },
+                ] : []),
+              ].map(({ label, value }) => (
+                <Fragment key={label}>
+                  <span className="text-muted">{label}</span>
+                  <span className="text-foreground font-mono capitalize">{value}</span>
+                </Fragment>
+              ))}
             </div>
 
             {createMutation.error && (
-              <p className="text-sm text-red-600">
+              <div className="flex items-center gap-2 text-red-400 text-xs p-3 bg-red-500/10 rounded-lg border border-red-500/20">
+                <AlertCircle className="h-4 w-4 shrink-0" />
                 {createMutation.error.message}
-              </p>
+              </div>
             )}
 
-            <Button
-              onClick={handleSubmit}
-              isLoading={createMutation.isPending}
-              className="w-full"
-              size="lg"
-            >
-              Create Project
+            <Button onClick={handleSubmit} isLoading={createMutation.isPending} className="w-full" size="lg">
+              <Rocket className="h-4 w-4" />
+              {createMutation.isPending ? "Creating..." : "Create & Deploy"}
             </Button>
           </CardContent>
         </Card>

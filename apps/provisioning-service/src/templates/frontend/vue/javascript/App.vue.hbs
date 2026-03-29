@@ -1,0 +1,85 @@
+<script setup>
+import { ref, onMounted } from 'vue'
+
+const items = ref([])
+const newTitle = ref('')
+const loading = ref(true)
+const API = import.meta.env.VITE_API_URL || ''
+
+onMounted(async () => {
+  try {
+    const res = await fetch(`${API}/api/items`)
+    items.value = await res.json()
+  } finally {
+    loading.value = false
+  }
+})
+
+async function addItem() {
+  if (!newTitle.value.trim()) return
+  const res = await fetch(`${API}/api/items`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: newTitle.value }),
+  })
+  items.value.push(await res.json())
+  newTitle.value = ''
+}
+</script>
+
+<template>
+  <div class="app">
+    <h1>{{projectName}}</h1>
+    <p class="subtitle">Built with Vue 3 + Vite · Deployed by DuckOps</p>
+
+    <div class="add-item">
+      <input
+        v-model="newTitle"
+        @keydown.enter="addItem"
+        placeholder="Add an item..."
+      />
+      <button @click="addItem">Add</button>
+    </div>
+
+    <p v-if="loading">Loading...</p>
+    <ul v-else>
+      <li v-for="item in items" :key="item.id" :class="{ done: item.completed }">
+        {{ item.title }}
+      </li>
+      <li v-if="items.length === 0" class="empty">No items yet.</li>
+    </ul>
+  </div>
+</template>
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #0f172a; color: #e2e8f0;
+  min-height: 100vh; display: flex; justify-content: center; padding: 3rem 1rem;
+}
+.app { width: 100%; max-width: 560px; }
+h1 {
+  font-size: 2rem; font-weight: 700;
+  background: linear-gradient(135deg, #42d392, #647eff);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  margin-bottom: 0.25rem;
+}
+.subtitle { color: #64748b; font-size: 0.875rem; margin-bottom: 2rem; }
+.add-item { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+input {
+  flex: 1; padding: 0.625rem 0.875rem; background: #1e293b;
+  border: 1px solid #334155; border-radius: 8px; color: #e2e8f0;
+  font-size: 0.9rem; outline: none;
+}
+input:focus { border-color: #42d392; }
+button {
+  padding: 0.625rem 1.25rem; background: #42d392; color: #0f172a;
+  border: none; border-radius: 8px; font-size: 0.9rem; cursor: pointer; font-weight: 600;
+}
+button:hover { background: #34c07a; }
+ul { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+li { padding: 0.875rem 1rem; background: #1e293b; border: 1px solid #334155; border-radius: 8px; }
+li.done { opacity: 0.4; text-decoration: line-through; }
+li.empty { color: #475569; text-align: center; }
+</style>

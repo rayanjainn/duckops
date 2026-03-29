@@ -4,11 +4,11 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { AppShell } from "@/components/layout/AppShell";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "DuckOps — Developer Platform",
-  description: "Self-service internal developer platform for cloud-native app provisioning",
+  title: "DuckOps — Internal Developer Platform",
+  description: "Self-service developer platform for cloud-native app provisioning, CI/CD, and monitoring",
 };
 
 export default function RootLayout({
@@ -17,8 +17,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={`${inter.className} bg-gray-50 text-gray-900`}>
+    <html lang="en" className="dark">
+      <body className={`${inter.variable} font-sans antialiased`}>
         <Providers>
           <AppShell>{children}</AppShell>
         </Providers>

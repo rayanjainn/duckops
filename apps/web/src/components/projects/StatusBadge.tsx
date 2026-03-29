@@ -4,25 +4,25 @@ import { cn, getStatusColor, getStatusLabel, isActiveStatus } from "@/lib/utils"
 interface StatusBadgeProps {
   status: ProjectStatus;
   message?: string | null;
+  size?: "sm" | "default";
 }
 
-export function StatusBadge({ status, message }: StatusBadgeProps) {
+export function StatusBadge({ status, message, size = "default" }: StatusBadgeProps) {
   const dot = getStatusColor(status);
   const label = getStatusLabel(status);
   const active = isActiveStatus(status);
 
   return (
     <div className="flex items-center gap-2">
-      <span
-        className={cn(
-          "inline-block w-2 h-2 rounded-full shrink-0",
-          dot,
-          active && "animate-pulse",
+      <span className="relative inline-flex shrink-0">
+        <span className={cn("inline-block rounded-full shrink-0", dot, size === "sm" ? "w-1.5 h-1.5" : "w-2 h-2")} />
+        {active && (
+          <span className={cn("absolute inset-0 rounded-full animate-ping-slow opacity-70", dot)} />
         )}
-      />
-      <span className="text-sm font-medium">{label}</span>
+      </span>
+      <span className={cn("font-medium text-white", size === "sm" ? "text-xs" : "text-sm")}>{label}</span>
       {message && (
-        <span className="text-xs text-gray-500 truncate max-w-[200px]">
+        <span className={cn("text-muted truncate max-w-[240px]", size === "sm" ? "text-xs" : "text-xs")}>
           — {message}
         </span>
       )}

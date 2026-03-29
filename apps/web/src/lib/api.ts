@@ -84,4 +84,29 @@ export const pipelineApi = {
 
   triggerBuild: (pipelineId: string) =>
     api.post(`/api/pipelines/${pipelineId}/build`).then((r) => r.data),
+
+  snapshot: (projectId: string): Promise<LiveBuildInfo | null> =>
+    api.get(`/api/pipelines/project/${projectId}/snapshot`).then((r) => r.data),
+
+  liveUrl: (projectId: string): string =>
+    `${API_BASE}/api/pipelines/project/${projectId}/live`,
 };
+
+export interface BuildStage {
+  id: string;
+  name: string;
+  status: "IN_PROGRESS" | "SUCCESS" | "FAILED" | "NOT_EXECUTED" | "PAUSED";
+  durationMillis: number;
+}
+
+export interface LiveBuildInfo {
+  building: boolean;
+  number: number | null;
+  result: string | null;
+  url: string | null;
+  stages: BuildStage[];
+  consoleLines: string[];
+  estimatedDurationMs: number;
+  durationMs: number;
+  error?: string;
+}

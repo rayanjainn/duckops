@@ -3,97 +3,84 @@ import { PrismaClient, Layer } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
-  // Seed Languages
-  await prisma.templateOption.upsert({
-    where: { layer_name: { layer: Layer.LANGUAGE, name: "nodejs" } },
-    update: {},
-    create: {
-      layer: Layer.LANGUAGE,
-      name: "nodejs",
-      displayName: "Node.js",
-      description: "JavaScript runtime built on Chrome's V8 engine",
-      icon: "nodejs",
-      version: "22.x LTS",
-      compatibleWith: {},
-    },
+  console.log("🌱 Starting database seed...");
+
+  // Remove legacy "nodejs" language if it exists
+  await prisma.templateOption.deleteMany({
+    where: { layer: Layer.LANGUAGE, name: "nodejs" },
   });
 
-  // Seed Frameworks
-  await prisma.templateOption.upsert({
-    where: { layer_name: { layer: Layer.FRAMEWORK, name: "react" } },
-    update: {},
-    create: {
+  const languages = [
+    {
+      layer: Layer.LANGUAGE,
+      name: "typescript",
+      displayName: "TypeScript",
+      description: "Typed superset of JavaScript that compiles to plain JS",
+      icon: "typescript",
+      version: "5.7",
+      compatibleWith: {},
+    },
+    {
+      layer: Layer.LANGUAGE,
+      name: "javascript",
+      displayName: "JavaScript",
+      description: "Dynamic language powering the modern web",
+      icon: "javascript",
+      version: "ES2024",
+      compatibleWith: {},
+    },
+  ];
+
+  const frameworks = [
+    {
       layer: Layer.FRAMEWORK,
       name: "react",
       displayName: "React",
       description: "Build UIs with the world's most popular frontend library",
       icon: "react",
       version: "18.x",
-      compatibleWith: { language: ["nodejs"] },
+      compatibleWith: { language: ["typescript", "javascript"] },
     },
-  });
-
-  await prisma.templateOption.upsert({
-    where: { layer_name: { layer: Layer.FRAMEWORK, name: "vue" } },
-    update: {},
-    create: {
+    {
       layer: Layer.FRAMEWORK,
       name: "vue",
       displayName: "Vue",
       description: "Progressive JavaScript framework for building UIs",
       icon: "vue",
       version: "3.x",
-      compatibleWith: { language: ["nodejs"] },
+      compatibleWith: { language: ["typescript", "javascript"] },
     },
-  });
-
-  await prisma.templateOption.upsert({
-    where: { layer_name: { layer: Layer.FRAMEWORK, name: "nextjs" } },
-    update: {},
-    create: {
+    {
       layer: Layer.FRAMEWORK,
       name: "nextjs",
       displayName: "Next.js",
       description: "Full-stack React framework with SSR and App Router",
       icon: "nextjs",
       version: "15.x",
-      compatibleWith: { language: ["nodejs"] },
+      compatibleWith: { language: ["typescript", "javascript"] },
     },
-  });
-
-  await prisma.templateOption.upsert({
-    where: { layer_name: { layer: Layer.FRAMEWORK, name: "express" } },
-    update: {},
-    create: {
+    {
       layer: Layer.FRAMEWORK,
       name: "express",
       displayName: "Express",
-      description: "Fast, minimal web framework for Node.js",
+      description: "Fast, minimal web framework for server-side apps",
       icon: "express",
       version: "5.x",
-      compatibleWith: { language: ["nodejs"] },
+      compatibleWith: { language: ["typescript", "javascript"] },
     },
-  });
-
-  await prisma.templateOption.upsert({
-    where: { layer_name: { layer: Layer.FRAMEWORK, name: "fastify" } },
-    update: {},
-    create: {
+    {
       layer: Layer.FRAMEWORK,
       name: "fastify",
       displayName: "Fastify",
       description: "High-performance web framework focused on speed",
       icon: "fastify",
       version: "5.x",
-      compatibleWith: { language: ["nodejs"] },
+      compatibleWith: { language: ["typescript", "javascript"] },
     },
-  });
+  ];
 
-  // Seed Databases
-  await prisma.templateOption.upsert({
-    where: { layer_name: { layer: Layer.DATABASE, name: "postgresql" } },
-    update: {},
-    create: {
+  const databases = [
+    {
       layer: Layer.DATABASE,
       name: "postgresql",
       displayName: "PostgreSQL",
@@ -102,12 +89,7 @@ async function main() {
       version: "16",
       compatibleWith: {},
     },
-  });
-
-  await prisma.templateOption.upsert({
-    where: { layer_name: { layer: Layer.DATABASE, name: "mysql" } },
-    update: {},
-    create: {
+    {
       layer: Layer.DATABASE,
       name: "mysql",
       displayName: "MySQL",
@@ -116,12 +98,7 @@ async function main() {
       version: "8.4",
       compatibleWith: {},
     },
-  });
-
-  await prisma.templateOption.upsert({
-    where: { layer_name: { layer: Layer.DATABASE, name: "none" } },
-    update: {},
-    create: {
+    {
       layer: Layer.DATABASE,
       name: "none",
       displayName: "None",
@@ -130,13 +107,10 @@ async function main() {
       version: "—",
       compatibleWith: { framework: ["react", "vue", "nextjs"] },
     },
-  });
+  ];
 
-  // Seed ORMs
-  await prisma.templateOption.upsert({
-    where: { layer_name: { layer: Layer.ORM, name: "prisma" } },
-    update: {},
-    create: {
+  const orms = [
+    {
       layer: Layer.ORM,
       name: "prisma",
       displayName: "Prisma",
@@ -145,12 +119,7 @@ async function main() {
       version: "6.x",
       compatibleWith: { database: ["postgresql", "mysql"] },
     },
-  });
-
-  await prisma.templateOption.upsert({
-    where: { layer_name: { layer: Layer.ORM, name: "drizzle" } },
-    update: {},
-    create: {
+    {
       layer: Layer.ORM,
       name: "drizzle",
       displayName: "Drizzle",
@@ -159,12 +128,7 @@ async function main() {
       version: "0.36.x",
       compatibleWith: { database: ["postgresql", "mysql"] },
     },
-  });
-
-  await prisma.templateOption.upsert({
-    where: { layer_name: { layer: Layer.ORM, name: "raw" } },
-    update: {},
-    create: {
+    {
       layer: Layer.ORM,
       name: "raw",
       displayName: "Raw SQL (pg driver)",
@@ -173,12 +137,7 @@ async function main() {
       version: "latest",
       compatibleWith: { database: ["postgresql", "mysql"] },
     },
-  });
-
-  await prisma.templateOption.upsert({
-    where: { layer_name: { layer: Layer.ORM, name: "none" } },
-    update: {},
-    create: {
+    {
       layer: Layer.ORM,
       name: "none",
       displayName: "None",
@@ -187,9 +146,24 @@ async function main() {
       version: "—",
       compatibleWith: { database: ["none"] },
     },
-  });
+  ];
 
-  console.log("✅ Seed data inserted successfully");
+  const allItems = [...languages, ...frameworks, ...databases, ...orms];
+
+  for (const item of allItems) {
+    await prisma.templateOption.upsert({
+      where: {
+        layer_name: {
+          layer: item.layer,
+          name: item.name,
+        },
+      },
+      update: item,
+      create: item,
+    });
+  }
+
+  console.log("✅ Seed data inserted/updated successfully");
 }
 
 main()

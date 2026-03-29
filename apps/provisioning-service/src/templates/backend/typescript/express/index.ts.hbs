@@ -1,0 +1,56 @@
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import { db } from "./db";
+
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || {{port}};
+
+app.use(cors());
+app.use(express.json());
+
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", project: "{{projectName}}" });
+});
+
+// Example CRUD routes
+app.get("/api/items", async (req, res) => {
+  try {
+{{#if (eq orm "prisma")}}
+    const items = await db.item.findMany();
+{{else if (eq orm "drizzle")}}
+    const items = await db.select().from(schema.items);
+{{else}}
+    const { rows: items } = await db.query("SELECT * FROM items");
+{{/if}}
+    res.json(items);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch items" });
+  }
+});
+
+app.post("/api/items", async (req, res) => {
+  try {
+    const { title } = req.body;
+{{#if (eq orm "prisma")}}
+    const item = await db.item.create({ data: { title } });
+{{else if (eq orm "drizzle")}}
+    const [item] = await db.insert(schema.items).values({ title }).returning();
+{{else}}
+    const { rows: [item] } = await db.query(
+      "INSERT INTO items (title) VALUES ($1) RETURNING *",
+      [title]
+    );
+{{/if}}
+    res.status(201).json(item);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to create item" });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`{{projectName}} running on port ${PORT}`);
+});
