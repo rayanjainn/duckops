@@ -49,7 +49,7 @@ export async function runAnsible(input: AnsibleInput): Promise<void> {
 
   const extraVars = JSON.stringify({
     project_name: projectName,
-    namespace,
+    k8s_namespace: namespace,
     database_url: `postgresql://duckops:duckops123@postgres.${namespace}.svc.cluster.local:5432/${projectName}`,
   });
 

@@ -1,5 +1,6 @@
 import { config } from "dotenv";
 import { resolve } from "path";
+// Try monorepo root .env (local dev), fall back to process.env (Vercel)
 config({ path: resolve(__dirname, "../../../.env") });
 
 import express from "express";
@@ -41,6 +42,12 @@ app.use(errorHandler);
 // ─── START SERVER ─────────────────────────────────────────────
 const PORT = Number(process.env.PORT) || 4001;
 
-httpServer.listen(PORT, () => {
-  logger.info(`Catalog Service running on port ${PORT}`);
-});
+// Only bind a port when running directly (not on Vercel serverless)
+if (process.env.VERCEL !== "1") {
+  httpServer.listen(PORT, () => {
+    logger.info(`Catalog Service running on port ${PORT}`);
+  });
+}
+
+// Vercel serverless handler
+export default app;

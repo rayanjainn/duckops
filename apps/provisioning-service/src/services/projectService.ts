@@ -231,6 +231,11 @@ export async function deleteProject(id: string, githubAccessToken?: string) {
     await deleteRepo(project.githubRepoFullName, githubAccessToken).catch(logger.error);
   }
 
+  // Delete child records first to avoid FK constraint violations
+  await prisma.deployment.deleteMany({ where: { projectId: id } });
+  await prisma.healthCheck.deleteMany({ where: { projectId: id } });
+  await prisma.pipeline.deleteMany({ where: { projectId: id } });
+
   return prisma.project.delete({ where: { id } });
 }
 

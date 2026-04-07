@@ -9,6 +9,7 @@ import {
   deletePipeline,
 } from "../services/pipelineService";
 import { getLiveBuildInfo } from "../services/jenkinsService";
+import { prisma, DeploymentStatus } from "@duckops/db";
 
 export const pipelineRouter = Router();
 
@@ -124,6 +125,42 @@ pipelineRouter.delete("/:id", async (req, res, next) => {
   try {
     await deletePipeline(req.params.id as string);
     res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/pipelines/deployments — called by Jenkinsfile to record a deployment
+pipelineRouter.post("/deployments", async (req, res, next) => {
+  try {
+    const { projectName, buildNumber, imageTag, status, buildLogs, deployLogs } = req.body as {
+      projectName: string;
+      buildNumber: string;
+      imageTag: string;
+      status: "SUCCESS" | "FAILED";
+      buildLogs?: string;
+      deployLogs?: string;
+    };
+
+    const project = await prisma.project.findUnique({ where: { name: projectName } });
+    if (!project) { res.status(404).json({ error: "Project not found" }); return; }
+
+    const deploymentStatus = status === "SUCCESS" ? DeploymentStatus.SUCCESS : DeploymentStatus.FAILED;
+
+    const deployment = await prisma.deployment.create({
+      data: {
+        projectId: project.id,
+        version: `build-${buildNumber}`,
+        imageTag,
+        status: deploymentStatus,
+        triggeredBy: "jenkins",
+        buildLogs: buildLogs ?? null,
+        deployLogs: deployLogs ?? null,
+        completedAt: new Date(),
+      },
+    });
+
+    res.status(201).json(deployment);
   } catch (err) {
     next(err);
   }

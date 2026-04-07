@@ -6,7 +6,7 @@
 
   vars:
     project_name: "{{ project_name }}"
-    namespace: "{{ namespace }}"
+    k8s_namespace: "{{ k8s_namespace }}"
     database_url: "{{ database_url }}"
     registry: "k3d-duckops-registry:5111"
     app_port: 3000
@@ -14,8 +14,8 @@
   tasks:
     - name: Ensure namespace exists
       shell: |
-        kubectl get namespace {{ namespace }} 2>/dev/null || \
-        kubectl create namespace {{ namespace }}
+        kubectl get namespace {{ k8s_namespace }} 2>/dev/null || \
+        kubectl create namespace {{ k8s_namespace }}
       changed_when: true
 
     - name: Apply Kubernetes deployment manifest
@@ -35,7 +35,7 @@
         kind: Ingress
         metadata:
           name: {{ project_name }}
-          namespace: {{ namespace }}
+          namespace: {{ k8s_namespace }}
           annotations:
             nginx.ingress.kubernetes.io/rewrite-target: /
         spec:
@@ -56,6 +56,6 @@
     - name: Wait for deployment rollout
       shell: |
         kubectl rollout status deployment/{{ project_name }} \
-          -n {{ namespace }} \
+          -n {{ k8s_namespace }} \
           --timeout=120s
       ignore_errors: true

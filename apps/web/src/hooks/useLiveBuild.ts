@@ -7,13 +7,14 @@ import { getToken } from "@/lib/auth";
 export function useLiveBuild(projectId: string | null) {
   const [data, setData] = useState<LiveBuildInfo | null>(null);
   const [connected, setConnected] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const esRef = useRef<EventSource | null>(null);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!projectId) return;
 
     const token = getToken();
-    // EventSource doesn't support headers — pass token as query param
     const url = `${pipelineApi.liveUrl(projectId)}${token ? `?token=${token}` : ""}`;
     const es = new EventSource(url);
     esRef.current = es;
@@ -32,20 +33,20 @@ export function useLiveBuild(projectId: string | null) {
     es.onerror = () => {
       setConnected(false);
       es.close();
-      // Retry after 5s
-      setTimeout(() => {
-        if (esRef.current === es) {
-          esRef.current = null;
-          setConnected(false);
-        }
-      }, 5000);
+      esRef.current = null;
+      // Retry in 5s by bumping retryCount, which re-runs this effect
+      retryTimer.current = setTimeout(() => setRetryCount((n) => n + 1), 5000);
     };
 
     return () => {
       es.close();
       esRef.current = null;
+      if (retryTimer.current) {
+        clearTimeout(retryTimer.current);
+        retryTimer.current = null;
+      }
     };
-  }, [projectId]);
+  }, [projectId, retryCount]);
 
   return { data, connected };
 }

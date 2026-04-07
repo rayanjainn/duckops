@@ -29,7 +29,10 @@ export async function scaffoldProject(input: ScaffoldInput): Promise<{ outputDir
   await fs.rm(outputDir, { recursive: true, force: true });
   await fs.mkdir(outputDir, { recursive: true });
 
-  const ctx = { ...input, port };
+  const healthPath = FRONTEND_FRAMEWORKS.has(input.framework)
+    ? input.framework === "nextjs" ? "/api/health" : "/health"
+    : "/health";
+  const ctx = { ...input, port, healthPath };
 
   if (FRONTEND_FRAMEWORKS.has(input.framework)) {
     await scaffoldFrontend(input, ctx, outputDir);
@@ -133,7 +136,10 @@ async function scaffoldFrontend(
     const configTpl = await loadTemplate(`frontend/nextjs/${tLang}/next.config.ts.hbs`);
     await writeFile(path.join(outputDir, "next.config.ts"), configTpl(ctx));
 
-    await fs.mkdir(path.join(outputDir, "public"), { recursive: true });
+    const cssTpl = await loadTemplate(`frontend/nextjs/${tLang}/globals.css.hbs`);
+    await writeFile(path.join(outputDir, "app", "globals.css"), cssTpl(ctx));
+
+    await writeFile(path.join(outputDir, "public", ".gitkeep"), "");
 
     const dockerTpl = await loadTemplate("devops/Dockerfile.nextjs.hbs");
     await writeFile(path.join(outputDir, "Dockerfile"), dockerTpl(ctx));
@@ -390,8 +396,8 @@ function generateBackendTsConfig() {
   return {
     compilerOptions: {
       target: "ES2022",
-      module: "ESNext",
-      moduleResolution: "node",
+      module: "NodeNext",
+      moduleResolution: "NodeNext",
       lib: ["ES2022"],
       outDir: "./dist",
       rootDir: "./src",

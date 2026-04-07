@@ -8,6 +8,7 @@ import type {
 import { getToken, clearSession } from "@/lib/auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4002";
+const PIPELINE_BASE = process.env.NEXT_PUBLIC_PIPELINE_URL || "http://localhost:4003";
 const CATALOG_BASE = process.env.NEXT_PUBLIC_CATALOG_URL || "http://localhost:4001";
 
 export const api = axios.create({
@@ -86,10 +87,12 @@ export const pipelineApi = {
     api.post(`/api/pipelines/${pipelineId}/build`).then((r) => r.data),
 
   snapshot: (projectId: string): Promise<LiveBuildInfo | null> =>
-    api.get(`/api/pipelines/project/${projectId}/snapshot`).then((r) => r.data),
+    axios.get(`${PIPELINE_BASE}/api/pipelines/project/${projectId}/snapshot`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    }).then((r) => r.data),
 
   liveUrl: (projectId: string): string =>
-    `${API_BASE}/api/pipelines/project/${projectId}/live`,
+    `${PIPELINE_BASE}/api/pipelines/project/${projectId}/live`,
 };
 
 export interface BuildStage {

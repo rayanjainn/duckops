@@ -17,6 +17,7 @@ export function startHealthCheckCron() {
       where: {
         status: { in: [ProjectStatus.RUNNING, ProjectStatus.DEGRADED] },
       },
+      select: { id: true, name: true, framework: true, liveUrl: true, namespace: true },
     });
 
     await Promise.allSettled(
@@ -31,9 +32,14 @@ export function startHealthCheckCron() {
   logger.info("Health check cron started (every 30 seconds)");
 }
 
+function healthPath(framework: string): string {
+  return framework === "nextjs" ? "/api/health" : "/health";
+}
+
 async function checkProjectHealth(project: {
   id: string;
   name: string;
+  framework: string;
   liveUrl: string | null;
   namespace: string | null;
 }) {
@@ -48,7 +54,7 @@ async function checkProjectHealth(project: {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
 
-    const response = await fetch(`${project.liveUrl}/health`, {
+    const response = await fetch(`${project.liveUrl}${healthPath(project.framework)}`, {
       signal: controller.signal,
     });
 

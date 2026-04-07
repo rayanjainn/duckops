@@ -26,6 +26,12 @@ if [ ! -f .env ]; then
   echo "   NOTE: Edit .env and fill in GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, JWT_SECRET."
 fi
 
+# Ensure required frontend env vars are present (backfill for existing .env files)
+if ! grep -q "NEXT_PUBLIC_PIPELINE_URL" .env; then
+  echo "→ Adding NEXT_PUBLIC_PIPELINE_URL to .env..."
+  echo "NEXT_PUBLIC_PIPELINE_URL=http://localhost:4003" >> .env
+fi
+
 # ─── 3. pnpm install ─────────────────────────────────────────────────────────
 echo "→ Installing dependencies..."
 pnpm install
@@ -119,13 +125,26 @@ if [ "$jenkinsDone" = "y" ] || [ "$jenkinsDone" = "Y" ]; then
   docker compose up -d --build
 
   # Copy kubeconfig into Jenkins so it can run kubectl
+  # IMPORTANT: replace 0.0.0.0 with the k3d server's internal Docker IP.
+  # The raw kubeconfig from k3d uses 0.0.0.0:<host-port> which is unreachable
+  # from inside the Jenkins container. We must use the container's internal IP
+  # on the k3d-duckops Docker network instead (port 6443).
   if command -v k3d >/dev/null 2>&1; then
-    echo "→ Copying kubeconfig into Jenkins container..."
-    docker exec duckops-jenkins mkdir -p /root/.kube 2>/dev/null || true
-    k3d kubeconfig get duckops > /tmp/duckops-kubeconfig 2>/dev/null && \
-      docker cp /tmp/duckops-kubeconfig duckops-jenkins:/root/.kube/config && \
-      rm -f /tmp/duckops-kubeconfig && \
-      echo "   kubeconfig copied." || echo "   WARN: kubeconfig copy failed — Jenkins kubectl may not work"
+    echo "→ Copying kubeconfig (with internal Docker IP) into Jenkins container..."
+    K3D_SERVER_IP=$(docker inspect k3d-duckops-server-0 \
+      --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' 2>/dev/null | head -1)
+    if [ -n "$K3D_SERVER_IP" ]; then
+      k3d kubeconfig get duckops 2>/dev/null \
+        | sed "s|https://0.0.0.0:[0-9]*|https://${K3D_SERVER_IP}:6443|g" \
+        > /tmp/duckops-kubeconfig-jenkins
+      docker exec duckops-jenkins mkdir -p /root/.kube 2>/dev/null || true
+      docker cp /tmp/duckops-kubeconfig-jenkins duckops-jenkins:/root/.kube/config && \
+        echo "   kubeconfig copied (server: ${K3D_SERVER_IP}:6443)" || \
+        echo "   WARN: kubeconfig copy failed"
+      rm -f /tmp/duckops-kubeconfig-jenkins
+    else
+      echo "   WARN: could not detect k3d server IP — kubeconfig not copied"
+    fi
   fi
 else
   echo ""

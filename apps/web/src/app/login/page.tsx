@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { Github, GitBranch, Server, Zap, Activity } from "lucide-react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4002";
 
 const features = [
   { icon: GitBranch, text: "Automated scaffolding & GitHub repo creation" },

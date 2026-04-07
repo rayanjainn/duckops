@@ -50,7 +50,7 @@ async function addItem() {
     <p v-if="loading">Loading...</p>
     <ul v-else>
       <li v-for="item in items" :key="item.id" :class="{ done: item.completed }">
-        {{ item.title }}
+        \{{ item.title }}
       </li>
       <li v-if="items.length === 0" class="empty">No items yet.</li>
     </ul>
