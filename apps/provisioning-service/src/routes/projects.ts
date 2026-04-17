@@ -20,6 +20,8 @@ const createProjectSchema = z.object({
   framework: z.string().min(1),
   database: z.string().min(1),
   orm: z.string().min(1),
+  packageManager: z.string().min(1),
+  repoVisibility: z.enum(["public", "private"]).default("private"),
 });
 
 // POST /api/projects — requires auth

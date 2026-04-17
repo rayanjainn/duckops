@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { TemplateOption } from "@duckops/shared-types";
 import { cn } from "@/lib/utils";
-import { Check, Rocket, AlertCircle } from "lucide-react";
+import { Check, Rocket, AlertCircle, Lock, Globe } from "lucide-react";
 
 function OptionButton({
   option,
@@ -76,10 +76,13 @@ export function CreateProjectForm() {
     framework: "",
     database: "",
     orm: "",
+    packageManager: "",
+    repoVisibility: "private" as "public" | "private",
   });
 
   const FRONTEND_FRAMEWORKS = new Set(["react", "vue", "nextjs"]);
   const isFrontend = FRONTEND_FRAMEWORKS.has(form.framework);
+  const isTurbo = form.framework === "turbo";
 
   const compatParams: Record<string, string> = {};
   if (form.language) compatParams.language = form.language;
@@ -98,7 +101,7 @@ export function CreateProjectForm() {
         next.orm = "";
       }
       if (layer === "framework") {
-        if (FRONTEND_FRAMEWORKS.has(value)) {
+        if (FRONTEND_FRAMEWORKS.has(value) || value === "turbo") {
           next.database = "none";
           next.orm = "none";
         } else {
@@ -116,7 +119,8 @@ export function CreateProjectForm() {
     form.language &&
     form.framework &&
     form.database &&
-    form.orm;
+    form.orm &&
+    form.packageManager;
 
   const handleSubmit = () => {
     const name = form.displayName
@@ -125,7 +129,7 @@ export function CreateProjectForm() {
       .replace(/^-|-$/g, "");
 
     createMutation.mutate(
-      { ...form, name },
+      { ...form, name, repoVisibility: form.repoVisibility },
       {
         onSuccess: (project) => {
           router.push(`/projects/${project.id}`);
@@ -178,6 +182,54 @@ export function CreateProjectForm() {
               onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
             />
           </div>
+
+          <div className="space-y-1.5">
+            <Label>Repository Visibility</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setForm((p) => ({ ...p, repoVisibility: "private" }))}
+                className={cn(
+                  "relative p-3 rounded-xl border text-left transition-all flex items-center gap-3",
+                  form.repoVisibility === "private"
+                    ? "border-amber-500 bg-accent-muted shadow-lg shadow-amber-900/20"
+                    : "border-border-2 bg-surface-3/50 hover:border-muted hover:bg-surface-3",
+                )}
+              >
+                <Lock className={cn("h-4 w-4 shrink-0", form.repoVisibility === "private" ? "text-amber-400" : "text-muted")} />
+                <div>
+                  <div className={cn("font-semibold text-sm", form.repoVisibility === "private" ? "text-amber-300" : "text-foreground")}>Private</div>
+                  <div className="text-xs text-muted mt-0.5">Only you can see it</div>
+                </div>
+                {form.repoVisibility === "private" && (
+                  <div className="absolute top-2 right-2 w-4 h-4 bg-amber-600 rounded-full flex items-center justify-center">
+                    <Check className="h-2.5 w-2.5 text-white" />
+                  </div>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm((p) => ({ ...p, repoVisibility: "public" }))}
+                className={cn(
+                  "relative p-3 rounded-xl border text-left transition-all flex items-center gap-3",
+                  form.repoVisibility === "public"
+                    ? "border-amber-500 bg-accent-muted shadow-lg shadow-amber-900/20"
+                    : "border-border-2 bg-surface-3/50 hover:border-muted hover:bg-surface-3",
+                )}
+              >
+                <Globe className={cn("h-4 w-4 shrink-0", form.repoVisibility === "public" ? "text-amber-400" : "text-muted")} />
+                <div>
+                  <div className={cn("font-semibold text-sm", form.repoVisibility === "public" ? "text-amber-300" : "text-foreground")}>Public</div>
+                  <div className="text-xs text-muted mt-0.5">Anyone can see it</div>
+                </div>
+                {form.repoVisibility === "public" && (
+                  <div className="absolute top-2 right-2 w-4 h-4 bg-amber-600 rounded-full flex items-center justify-center">
+                    <Check className="h-2.5 w-2.5 text-white" />
+                  </div>
+                )}
+              </button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -229,7 +281,7 @@ export function CreateProjectForm() {
       )}
 
       {/* Database */}
-      {form.framework && !isFrontend && (
+      {form.framework && !isFrontend && !isTurbo && (
         <Card className={cn(isCompatLoading && "opacity-50 pointer-events-none")}>
           <CardHeader className="pb-4">
             <SectionHeader step={4} title="Database" done={!!form.database} />
@@ -256,7 +308,7 @@ export function CreateProjectForm() {
       )}
 
       {/* ORM */}
-      {form.database && !isFrontend && form.database !== "none" && (
+      {form.database && !isFrontend && !isTurbo && form.database !== "none" && (
         <Card className={cn(isCompatLoading && "opacity-50 pointer-events-none")}>
           <CardHeader className="pb-4">
             <SectionHeader step={5} title="ORM / Query Layer" done={!!form.orm} />
@@ -282,6 +334,27 @@ export function CreateProjectForm() {
         </Card>
       )}
 
+      {/* Package Manager */}
+      {(form.orm || (form.framework && (isFrontend || isTurbo))) && (
+        <Card>
+          <CardHeader className="pb-4">
+            <SectionHeader step={isFrontend || isTurbo ? 4 : 6} title="Package Manager" done={!!form.packageManager} />
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-3">
+              {allOptions?.PACKAGE_MANAGER?.map((opt) => (
+                <OptionButton
+                  key={opt.name}
+                  option={opt}
+                  selected={form.packageManager === opt.name}
+                  onClick={() => setForm((p) => ({ ...p, packageManager: opt.name }))}
+                />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Summary + Submit */}
       {isReady && (
         <Card className="border-accent-border bg-accent-muted">
@@ -293,10 +366,12 @@ export function CreateProjectForm() {
               {[
                 { label: "Language", value: form.language },
                 { label: "Framework", value: form.framework },
-                ...(!isFrontend ? [
+                ...(!isFrontend && !isTurbo ? [
                   { label: "Database", value: form.database },
                   { label: "ORM", value: form.orm },
                 ] : []),
+                ...(isTurbo ? [{ label: "Stack", value: "Next.js + Express + Prisma" }] : []),
+                { label: "Package Manager", value: form.packageManager },
               ].map(({ label, value }) => (
                 <Fragment key={label}>
                   <span className="text-muted">{label}</span>

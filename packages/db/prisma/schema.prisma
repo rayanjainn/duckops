@@ -45,15 +45,18 @@ model Project {
   framework          String
   database           String
   orm                String
+  packageManager     String   @default("npm")
   status             ProjectStatus @default(INITIALIZING)
   statusMessage      String?
   namespace          String?
   liveUrl            String?
+  webUrl             String?
   internalPort       Int?
   externalPort       Int?
   githubRepoUrl      String?
   githubRepoName     String?
   githubRepoFullName String?
+  repoVisibility     String        @default("private")
   userId             String
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
@@ -116,6 +119,7 @@ enum Layer {
   FRAMEWORK
   DATABASE
   ORM
+  PACKAGE_MANAGER
 }
 
 enum ProjectStatus {

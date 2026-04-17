@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useProject, useRetryProject } from "@/hooks/useProjects";
 import { useRealTimeStatus } from "@/hooks/useRealTimeStatus";
+import { useLiveBuild } from "@/hooks/useLiveBuild";
 import { useProjectStore } from "@/stores/projectStore";
 import { Header } from "@/components/layout/Header";
 import { StatusBadge } from "@/components/projects/StatusBadge";
@@ -88,7 +89,7 @@ function getStageIndex(status: ProjectStatus): number {
 
 // ─── Pipeline Stepper ────────────────────────────────────────────────────────
 
-function PipelineStepper({ current }: { current: ProjectStatus }) {
+function PipelineStepper({ current, activeSubStep }: { current: ProjectStatus; activeSubStep?: string | null }) {
   const [expanded, setExpanded] = useState<number | null>(null);
   const currentIdx = getStageIndex(current);
   const isFailed = current === "FAILED";
@@ -140,7 +141,9 @@ function PipelineStepper({ current }: { current: ProjectStatus }) {
                   {stage.label}
                 </p>
                 {active && (
-                  <p className="text-xs text-muted mt-0.5">{getStatusLabel(current)}...</p>
+                  <p className="text-xs text-muted mt-0.5">
+                    {activeSubStep || getStatusLabel(current)}...
+                  </p>
                 )}
               </div>
 
@@ -152,17 +155,22 @@ function PipelineStepper({ current }: { current: ProjectStatus }) {
 
             {isOpen && (
               <div className="ml-9 mt-1 mb-2 space-y-1 border-l border-border pl-4">
-                {stage.subSteps.map((step, j) => (
-                  <div key={j} className="flex items-center gap-2 py-1">
-                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                      done ? "bg-emerald-500" : active && j === 0 ? "bg-amber-500 animate-pulse" : "bg-surface-3"
-                    }`} />
-                    <span className={`text-xs ${done ? "text-muted-2" : active && j === 0 ? "text-foreground" : "text-muted"}`}>
-                      {step}
-                    </span>
-                    {done && <CheckCircle2 className="h-3 w-3 text-emerald-500/60 ml-auto" />}
-                  </div>
-                ))}
+                {stage.subSteps.map((step, j) => {
+                  const isActiveSubStep = active && activeSubStep
+                    ? step.toLowerCase().includes(activeSubStep.toLowerCase()) || activeSubStep.toLowerCase().includes(step.toLowerCase())
+                    : active && j === 0;
+                  return (
+                    <div key={j} className="flex items-center gap-2 py-1">
+                      <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                        done ? "bg-emerald-500" : isActiveSubStep ? "bg-amber-500 animate-pulse" : "bg-surface-3"
+                      }`} />
+                      <span className={`text-xs ${done ? "text-muted-2" : isActiveSubStep ? "text-foreground" : "text-muted"}`}>
+                        {step}
+                      </span>
+                      {done && <CheckCircle2 className="h-3 w-3 text-emerald-500/60 ml-auto" />}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -174,7 +182,7 @@ function PipelineStepper({ current }: { current: ProjectStatus }) {
 
 // ─── Infrastructure Flow Diagram ─────────────────────────────────────────────
 
-function InfraFlowDiagram({ project }: { project: { name: string; namespace?: string | null; liveUrl?: string | null; database: string } }) {
+function InfraFlowDiagram({ project }: { project: { name: string; namespace?: string | null; liveUrl?: string | null; database: string; status: string } }) {
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
 
   const nodes: Node[] = [
@@ -222,7 +230,7 @@ function InfraFlowDiagram({ project }: { project: { name: string; namespace?: st
       id: "pod",
       position: { x: 700, y: 280 },
       data: {
-        label: <NodeBox icon={<Activity className="h-4 w-4" />} title={project.name} sub="Pod · Running" accent="#60a5fa" accentBg="var(--color-surface-4)" />,
+        label: <NodeBox icon={<Activity className="h-4 w-4" />} title={project.name} sub={`Pod · ${project.status === "RUNNING" ? "Running" : project.status === "DEGRADED" ? "Degraded" : project.status === "STOPPED" ? "Stopped" : "Pending"}`} accent={project.status === "RUNNING" ? "#60a5fa" : project.status === "DEGRADED" ? "#f59e0b" : "#9ca3af"} accentBg="var(--color-surface-4)" />,
         description: "The actual running instance of your application container. Each pod is scheduled by Kubernetes and monitored by the DuckOps health service for real-time status updates.",
         type: "Application Container"
       },
@@ -376,7 +384,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const { id } = use(params);
   const { data: project, isLoading, refetch } = useProject(id);
   const { mutate: retry, isPending: isRetrying } = useRetryProject();
-  const { status: liveStatus } = useRealTimeStatus(id);
+  const { status: liveStatus, subStep: liveSubStep } = useRealTimeStatus(id);
+  const { data: liveBuild } = useLiveBuild(id);
   const updateLiveStatus = useProjectStore((s) => s.updateLiveStatus);
   const [activeTab, setActiveTab] = useState<"overview" | "pipeline" | "infra" | "health" | "deployments">("overview");
 
@@ -425,17 +434,28 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         description={project.description || `${project.language} · ${project.framework}${!isFrontend ? ` · ${project.database}` : ""}`}
         actions={
           <div className="flex items-center gap-2">
-            {(effectiveStatus === "FAILED" || project.status === "FAILED") && (
-              <Button variant="outline" size="sm" onClick={() => retry(id, { onSuccess: () => refetch() })} disabled={isRetrying}>
-                <RotateCcw className={`h-3.5 w-3.5 ${isRetrying ? "animate-spin" : ""}`} />
-                {isRetrying ? "Retrying..." : "Retry"}
-              </Button>
+            {(() => {
+              const isProvisioning = ["INITIALIZING","SCAFFOLDING","CREATING_REPO","PROVISIONING","CONFIGURING","PIPELINE_READY","DEPLOYING"].includes(effectiveStatus || "");
+              return (
+                <Button variant="outline" size="sm" onClick={() => retry(id, { onSuccess: () => refetch() })} disabled={isRetrying || isProvisioning}>
+                  <RotateCcw className={`h-3.5 w-3.5 ${isRetrying ? "animate-spin" : ""}`} />
+                  {isRetrying ? "Re-running..." : "Re-run Pipeline"}
+                </Button>
+              );
+            })()}
+            {project.webUrl && (
+              <a href={project.webUrl} target="_blank" rel="noopener noreferrer">
+                <Button size="sm" variant="outline">
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  Open Web
+                </Button>
+              </a>
             )}
             {project.liveUrl && (
               <a href={project.liveUrl} target="_blank" rel="noopener noreferrer">
                 <Button size="sm">
                   <ExternalLink className="h-3.5 w-3.5" />
-                  Open App
+                  {project.webUrl ? "Open API" : "Open App"}
                 </Button>
               </a>
             )}
@@ -460,7 +480,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             {project.liveUrl && (
               <a href={project.liveUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-amber-400 hover:text-amber-300">
                 <Globe className="h-3.5 w-3.5" />
-                {project.liveUrl}
+                {project.webUrl ? "API" : project.liveUrl}
+              </a>
+            )}
+            {project.webUrl && (
+              <a href={project.webUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300">
+                <Globe className="h-3.5 w-3.5" />
+                Web
               </a>
             )}
             {project.githubRepoUrl && (
@@ -533,8 +559,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                       <span className="text-xs font-mono text-amber-400 truncate">{project.githubRepoFullName}</span>
                     </a>
                     <div className="text-xs text-muted space-y-1">
-                      <p className="flex justify-between"><span>Branch</span><span className="text-foreground font-mono">main</span></p>
-                      <p className="flex justify-between"><span>Visibility</span><span className="text-foreground">Private</span></p>
+                      <p className="flex justify-between"><span>Branch</span><span className="text-foreground font-mono">{project.pipeline?.branch || "main"}</span></p>
+                      <p className="flex justify-between"><span>Visibility</span><span className="text-foreground capitalize">{project.repoVisibility || "private"}</span></p>
                     </div>
                   </>
                 ) : (
@@ -575,7 +601,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 <CardTitle className="text-sm">Provisioning Stages</CardTitle>
               </CardHeader>
               <CardContent>
-                <PipelineStepper current={effectiveStatus || project.status} />
+                <PipelineStepper current={effectiveStatus || project.status} activeSubStep={liveSubStep} />
               </CardContent>
             </Card>
 
@@ -603,20 +629,36 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                         )}
                       </div>
 
-                      <div className="space-y-2">
-                        <p className="text-xs text-muted font-medium">Build Stages</p>
-                        {["Checkout", "Install", "Test", "Build Image", "Push to Registry", "Deploy to K8s"].map((step, i) => (
-                          <div key={step} className="flex items-center gap-2">
-                            <div className={`w-5 h-5 rounded flex items-center justify-center text-xs font-bold shrink-0 ${
-                              project.pipeline!.lastBuildStatus === "SUCCESS" ? "bg-emerald-600/20 text-emerald-400" : "bg-surface-3 text-muted"
-                            }`}>{i + 1}</div>
-                            <span className="text-xs text-muted-2">{step}</span>
-                            {project.pipeline!.lastBuildStatus === "SUCCESS" && (
-                              <CheckCircle2 className="h-3 w-3 text-emerald-500 ml-auto" />
+                      {/* Real stage data from Jenkins wfapi — falls back to nothing if no build yet */}
+                      {liveBuild?.stages && liveBuild.stages.length > 0 ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-muted font-medium">Build Stages</p>
+                            {liveBuild.building && (
+                              <span className="text-xs text-amber-400 animate-pulse">● Running</span>
                             )}
                           </div>
-                        ))}
-                      </div>
+                          {liveBuild.stages.map((stage, i) => (
+                            <div key={stage.id} className="flex items-center gap-2">
+                              <div className={`w-5 h-5 rounded flex items-center justify-center text-xs font-bold shrink-0 ${
+                                stage.status === "SUCCESS" ? "bg-emerald-600/20 text-emerald-400" :
+                                stage.status === "FAILED" ? "bg-red-600/20 text-red-400" :
+                                stage.status === "IN_PROGRESS" ? "bg-amber-600/20 text-amber-400" :
+                                "bg-surface-3 text-muted"
+                              }`}>{i + 1}</div>
+                              <span className="text-xs text-muted-2 flex-1">{stage.name}</span>
+                              <span className="text-xs text-muted font-mono">
+                                {stage.durationMillis > 0 ? `${(stage.durationMillis / 1000).toFixed(1)}s` : ""}
+                              </span>
+                              {stage.status === "SUCCESS" && <CheckCircle2 className="h-3 w-3 text-emerald-500" />}
+                              {stage.status === "FAILED" && <AlertCircle className="h-3 w-3 text-red-400" />}
+                              {stage.status === "IN_PROGRESS" && <Clock className="h-3 w-3 text-amber-400 animate-spin" style={{ animationDuration: "3s" }} />}
+                            </div>
+                          ))}
+                        </div>
+                      ) : project.pipeline?.lastBuildNumber ? (
+                        <p className="text-xs text-muted">Stage data unavailable — check Jenkins directly</p>
+                      ) : null}
 
                       {project.pipeline.jenkinsJobUrl && (
                         <a href={project.pipeline.jenkinsJobUrl} target="_blank" rel="noopener noreferrer">
@@ -718,11 +760,26 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 </CardHeader>
                 <CardContent className="space-y-3 text-xs">
                   {project.liveUrl ? (
-                    <a href={project.liveUrl} target="_blank" rel="noopener noreferrer"
-                      className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-600/10 border border-emerald-500/20 hover:bg-emerald-600/15 transition-colors">
-                      <Globe className="h-4 w-4 text-emerald-400 shrink-0" />
-                      <span className="text-emerald-400 font-mono truncate">{project.liveUrl}</span>
-                    </a>
+                    <div className="space-y-2">
+                      <a href={project.liveUrl} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-600/10 border border-emerald-500/20 hover:bg-emerald-600/15 transition-colors">
+                        <Globe className="h-4 w-4 text-emerald-400 shrink-0" />
+                        <div className="min-w-0">
+                          {project.webUrl && <p className="text-[10px] text-muted uppercase tracking-wide mb-0.5">API</p>}
+                          <span className="text-emerald-400 font-mono truncate text-xs">{project.liveUrl}</span>
+                        </div>
+                      </a>
+                      {project.webUrl && (
+                        <a href={project.webUrl} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-2 p-2.5 rounded-lg bg-blue-600/10 border border-blue-500/20 hover:bg-blue-600/15 transition-colors">
+                          <Globe className="h-4 w-4 text-blue-400 shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-[10px] text-muted uppercase tracking-wide mb-0.5">Web</p>
+                            <span className="text-blue-400 font-mono truncate text-xs">{project.webUrl}</span>
+                          </div>
+                        </a>
+                      )}
+                    </div>
                   ) : (
                     <p className="text-muted">Not yet accessible</p>
                   )}

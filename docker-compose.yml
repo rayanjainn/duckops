@@ -14,9 +14,16 @@ services:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U duckops"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 128m
 
   redis:
     image: redis:7-alpine
@@ -26,11 +33,19 @@ services:
       - "6379:6379"
     volumes:
       - redisdata:/data
+    command: redis-server --save "" --appendonly no --maxmemory 96mb --maxmemory-policy allkeys-lru
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 32m
 
   # ─── CI/CD ───────────────────────────────────────────────────
   jenkins:
@@ -42,22 +57,36 @@ services:
     ports:
       - "8085:8080"
       - "50000:50000"
-    volumes:
-      - jenkinsdata:/var/jenkins_home
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ${HOME}/.kube:/root/.kube-host:ro
     environment:
-      JAVA_OPTS: "-Djenkins.install.runSetupWizard=false"
+      JAVA_OPTS: "-Djenkins.install.runSetupWizard=false -Xmx1g -Xms512m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+      # Give pnpm a persistent store inside the Jenkins container so
+      # packages are reused across builds instead of re-downloaded every time.
+      PNPM_HOME: /var/jenkins_home/.pnpm-store
     user: root
     networks:
       - default
       - k3d-duckops
+    volumes:
+      - jenkinsdata:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${HOME}/.kube:/root/.kube-host:ro
+      # Persistent pnpm content-addressable store shared across all pipeline builds
+      - jenkins-pnpm-store:/var/jenkins_home/.pnpm-store
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+        reservations:
+          memory: 768m
 
   # ─── Microservices ──────────────────────────────────────────
   catalog-service:
     build:
       context: .
       dockerfile: apps/catalog-service/Dockerfile
+      # BuildKit cache mounts need DOCKER_BUILDKIT=1 (set in .env or shell)
+      args:
+        BUILDKIT_INLINE_CACHE: "1"
     container_name: duckops-catalog
     restart: unless-stopped
     ports:
@@ -66,7 +95,7 @@ services:
       DATABASE_URL: postgresql://duckops:duckops123@postgres:5432/duckops
       REDIS_URL: redis://redis:6379
       PORT: "4001"
-      NODE_ENV: development
+      NODE_ENV: production
     depends_on:
       postgres:
         condition: service_healthy
@@ -74,11 +103,19 @@ services:
       watch:
         - action: rebuild
           path: apps/catalog-service/src
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 64m
 
   provisioning-service:
     build:
       context: .
       dockerfile: apps/provisioning-service/Dockerfile
+      args:
+        BUILDKIT_INLINE_CACHE: "1"
     container_name: duckops-provisioning
     restart: unless-stopped
     ports:
@@ -87,13 +124,14 @@ services:
       DATABASE_URL: postgresql://duckops:duckops123@postgres:5432/duckops
       REDIS_URL: redis://redis:6379
       JENKINS_URL: http://jenkins:8080
+      PIPELINE_SERVICE_URL: http://pipeline-service:4003
       PORT: "4002"
-      NODE_ENV: development
+      NODE_ENV: production
       DUCKOPS_ENV: local
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
-      JWT_SECRET: ${JWT_SECRET:-change_me_in_production}
-      APP_URL: ${APP_URL:-http://localhost:4000}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      APP_URL: ${APP_URL:-http://localhost:4002}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     volumes:
       - /tmp/duckops-projects:/tmp/duckops-projects
@@ -106,11 +144,19 @@ services:
       watch:
         - action: rebuild
           path: apps/provisioning-service/src
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 128m
 
   pipeline-service:
     build:
       context: .
       dockerfile: apps/pipeline-service/Dockerfile
+      args:
+        BUILDKIT_INLINE_CACHE: "1"
     container_name: duckops-pipeline
     restart: unless-stopped
     ports:
@@ -118,22 +164,32 @@ services:
     environment:
       DATABASE_URL: postgresql://duckops:duckops123@postgres:5432/duckops
       JENKINS_URL: http://jenkins:8080
-      JENKINS_USER: admin
+      JENKINS_USER: ${JENKINS_USER:-admin}
       JENKINS_TOKEN: ${JENKINS_TOKEN:-}
       PORT: "4003"
-      NODE_ENV: development
+      NODE_ENV: production
     depends_on:
-      - postgres
-      - jenkins
+      postgres:
+        condition: service_healthy
+      jenkins:
+        condition: service_started
     develop:
       watch:
         - action: rebuild
           path: apps/pipeline-service/src
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 64m
 
   health-service:
     build:
       context: .
       dockerfile: apps/health-service/Dockerfile
+      args:
+        BUILDKIT_INLINE_CACHE: "1"
     container_name: duckops-health
     restart: unless-stopped
     ports:
@@ -141,18 +197,32 @@ services:
     environment:
       DATABASE_URL: postgresql://duckops:duckops123@postgres:5432/duckops
       PORT: "4004"
-      NODE_ENV: development
+      NODE_ENV: production
+      KUBECONFIG: /root/.kube/config
+    volumes:
+      # Kubeconfig is written by setup-local.sh with the k3d server's Docker-network IP.
+      # health-service uses kubectl exec to run health checks inside pods.
+      - health-kube:/root/.kube
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - default
+      - k3d-duckops
     develop:
       watch:
         - action: rebuild
           path: apps/health-service/src
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 64m
 
   # ─── API Gateway ─────────────────────────────────────────────
   nginx:
-    image: nginx:alpine
+    image: nginx:1.27-alpine
     container_name: duckops-nginx
     restart: unless-stopped
     ports:
@@ -164,11 +234,19 @@ services:
       - provisioning-service
       - pipeline-service
       - health-service
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+        reservations:
+          memory: 16m
 
 volumes:
   pgdata:
   redisdata:
   jenkinsdata:
+  jenkins-pnpm-store:
+  health-kube:
 
 networks:
   default:

@@ -8,6 +8,15 @@ dist
 !.env.example
 
 .claude
+.code-review-graph
+.cursor
+.cursorrules
+.mcp.json
+.opencode.json
+.windsurfrules
+AGENTS.md
+CLAUDE.md
+GEMINI.md
 
 # Prisma
 packages/db/prisma/migrations/*.sql

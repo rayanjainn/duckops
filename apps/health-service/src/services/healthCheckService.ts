@@ -36,6 +36,39 @@ function healthPath(framework: string): string {
   return framework === "nextjs" ? "/api/health" : "/health";
 }
 
+// Run a health check by executing curl inside the k3d cluster via kubectl.
+//
+// Why: health-service runs in Docker Compose (outside the k3d cluster).
+// The k3d serverlb only forwards NodePorts 30000-30100 to the host — port 80
+// is only bound on the macOS host, not on the Docker network. There is no
+// direct HTTP path from Docker Compose containers into Traefik's port 80.
+//
+// kubectl exec runs curl inside a running pod in the target namespace.
+// That pod IS in the cluster, so K8s service DNS works perfectly.
+// The pod that's already running (the app itself) is used — no extra pods needed.
+async function execHealthCheck(project: {
+  name: string;
+  namespace: string | null;
+  framework: string;
+}): Promise<{ statusCode: number; body: string }> {
+  if (!project.namespace) throw new Error("No namespace");
+
+  const path = healthPath(project.framework);
+  const serviceUrl = `http://${project.name}.${project.namespace}.svc.cluster.local${path}`;
+
+  // Run curl inside the app pod — available in the node:alpine base image
+  const { stdout } = await execAsync(
+    `kubectl exec -n ${project.namespace} deploy/${project.name} -- wget -qO- -T 4 "${serviceUrl}" 2>/dev/null`,
+    { timeout: 6000 },
+  );
+
+  return { statusCode: 200, body: stdout.trim() };
+}
+
+// Number of consecutive non-healthy checks required before flipping to DEGRADED.
+// A single blip (pod restart, GC pause) should not degrade the project.
+const DEGRADE_THRESHOLD = 3;
+
 async function checkProjectHealth(project: {
   id: string;
   name: string;
@@ -43,7 +76,7 @@ async function checkProjectHealth(project: {
   liveUrl: string | null;
   namespace: string | null;
 }) {
-  if (!project.liveUrl) return;
+  if (!project.namespace) return;
 
   const startTime = Date.now();
   let status: HealthStatus;
@@ -51,25 +84,20 @@ async function checkProjectHealth(project: {
   let message: string | null = null;
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-
-    const response = await fetch(`${project.liveUrl}${healthPath(project.framework)}`, {
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeout);
-    statusCode = response.status;
-
-    status = response.ok ? HealthStatus.HEALTHY : HealthStatus.UNHEALTHY;
-    message = response.ok ? "Service responding normally" : `HTTP ${statusCode}`;
+    const { statusCode: code, body } = await execHealthCheck(project);
+    statusCode = code;
+    // A valid JSON body with status:ok means healthy; any 2xx response is healthy
+    const isOk = body.includes('"ok"') || body.includes('"healthy"') || body.length > 0;
+    status = isOk ? HealthStatus.HEALTHY : HealthStatus.UNHEALTHY;
+    message = isOk ? "Service responding normally" : `Unexpected response: ${body.slice(0, 100)}`;
   } catch (err: any) {
-    if (err.name === "AbortError") {
+    const msg: string = err.message || "";
+    if (msg.includes("timeout") || err.killed) {
       status = HealthStatus.TIMEOUT;
       message = "Health check timed out (5s)";
     } else {
       status = HealthStatus.UNHEALTHY;
-      message = err.message;
+      message = msg.slice(0, 200);
     }
   }
 
@@ -83,13 +111,20 @@ async function checkProjectHealth(project: {
   if (status === HealthStatus.HEALTHY) {
     newProjectStatus = ProjectStatus.RUNNING;
   } else {
-    // Only degrade if the project has been healthy at least once before.
-    // This prevents freshly provisioned projects (with no real app yet) from
-    // immediately flipping to DEGRADED.
-    const everHealthy = await prisma.healthCheck.findFirst({
-      where: { projectId: project.id, status: HealthStatus.HEALTHY },
+    // Require DEGRADE_THRESHOLD consecutive non-healthy checks before degrading.
+    // This prevents a single pod restart or network blip from flipping the project.
+    const recentChecks = await prisma.healthCheck.findMany({
+      where: { projectId: project.id },
+      orderBy: { checkedAt: "desc" },
+      take: DEGRADE_THRESHOLD,
+      select: { status: true },
     });
-    newProjectStatus = everHealthy ? ProjectStatus.DEGRADED : ProjectStatus.RUNNING;
+
+    const allRecentUnhealthy =
+      recentChecks.length >= DEGRADE_THRESHOLD &&
+      recentChecks.every((c) => c.status !== HealthStatus.HEALTHY);
+
+    newProjectStatus = allRecentUnhealthy ? ProjectStatus.DEGRADED : ProjectStatus.RUNNING;
   }
 
   await prisma.project.update({

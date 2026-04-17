@@ -25,7 +25,7 @@ export type DeploymentStatus =
 
 export type HealthStatus = "HEALTHY" | "UNHEALTHY" | "TIMEOUT" | "UNKNOWN";
 
-export type Layer = "LANGUAGE" | "FRAMEWORK" | "DATABASE" | "ORM";
+export type Layer = "LANGUAGE" | "FRAMEWORK" | "DATABASE" | "ORM" | "PACKAGE_MANAGER";
 
 export type Role = "ADMIN" | "DEVELOPER";
 
@@ -62,15 +62,18 @@ export interface Project {
   framework: string;
   database: string;
   orm: string;
+  packageManager: string;
   status: ProjectStatus;
   statusMessage?: string;
   namespace?: string;
   liveUrl?: string;
+  webUrl?: string;
   internalPort?: number;
   externalPort?: number;
   githubRepoUrl?: string;
   githubRepoName?: string;
   githubRepoFullName?: string;
+  repoVisibility?: "public" | "private";
   userId: string;
   pipeline?: Pipeline;
   deployments?: Deployment[];
@@ -127,6 +130,8 @@ export interface CreateProjectInput {
   framework: string;
   database: string;
   orm: string;
+  packageManager: string;
+  repoVisibility?: "public" | "private";
 }
 
 export interface CreateProjectResponse {
@@ -138,6 +143,7 @@ export interface GroupedTemplateOptions {
   FRAMEWORK?: TemplateOption[];
   DATABASE?: TemplateOption[];
   ORM?: TemplateOption[];
+  PACKAGE_MANAGER?: TemplateOption[];
 }
 
 // ─── Socket.io event payloads ───────────────────────────────────
@@ -145,6 +151,7 @@ export interface GroupedTemplateOptions {
 export interface ProjectStatusEvent {
   status: ProjectStatus;
   message: string;
+  subStep?: string;
 }
 
 export interface HealthCheckEvent {

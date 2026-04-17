@@ -15,6 +15,7 @@ export interface ScaffoldInput {
   framework: string;
   database: string;
   orm: string;
+  packageManager: string;
   port?: number;
 }
 
@@ -32,9 +33,12 @@ export async function scaffoldProject(input: ScaffoldInput): Promise<{ outputDir
   const healthPath = FRONTEND_FRAMEWORKS.has(input.framework)
     ? input.framework === "nextjs" ? "/api/health" : "/health"
     : "/health";
-  const ctx = { ...input, port, healthPath };
+  const pm = pmCommands(input.packageManager);
+  const ctx = { ...input, port, healthPath, pmInstall: pm.install, pmRun: pm.run, pmExec: pm.exec, pmSetup: pm.setup };
 
-  if (FRONTEND_FRAMEWORKS.has(input.framework)) {
+  if (input.framework === "turbo") {
+    await scaffoldTurbo(input, ctx, outputDir);
+  } else if (FRONTEND_FRAMEWORKS.has(input.framework)) {
     await scaffoldFrontend(input, ctx, outputDir);
   } else {
     await scaffoldBackend(input, ctx, outputDir);
@@ -237,6 +241,106 @@ async function scaffoldBackend(
   await writeFile(path.join(outputDir, ".env.example"), generateEnvExample(input));
 }
 
+async function scaffoldTurbo(
+  input: ScaffoldInput,
+  ctx: Record<string, unknown>,
+  outputDir: string,
+) {
+  const tplDir = "frontend/turbo/typescript";
+
+  // Root monorepo files
+  const rootPkgTpl = await loadTemplate(`${tplDir}/root-package.json.hbs`);
+  await writeFile(path.join(outputDir, "package.json"), rootPkgTpl(ctx));
+
+  const turboTpl = await loadTemplate(`${tplDir}/turbo.json.hbs`);
+  await writeFile(path.join(outputDir, "turbo.json"), turboTpl(ctx));
+
+  await writeFile(
+    path.join(outputDir, "tsconfig.json"),
+    JSON.stringify({ compilerOptions: { strict: true, skipLibCheck: true } }, null, 2),
+  );
+
+  // ── apps/web (Next.js) ────────────────────────────────────────
+  const webPkgTpl = await loadTemplate(`${tplDir}/web-package.json.hbs`);
+  await writeFile(path.join(outputDir, "apps", "web", "package.json"), webPkgTpl(ctx));
+
+  const webPageTpl = await loadTemplate(`${tplDir}/web-page.tsx.hbs`);
+  await writeFile(path.join(outputDir, "apps", "web", "app", "page.tsx"), webPageTpl(ctx));
+
+  const webLayoutTpl = await loadTemplate(`${tplDir}/web-layout.tsx.hbs`);
+  await writeFile(path.join(outputDir, "apps", "web", "app", "layout.tsx"), webLayoutTpl(ctx));
+
+  const webNextTpl = await loadTemplate(`${tplDir}/web-next.config.ts.hbs`);
+  await writeFile(path.join(outputDir, "apps", "web", "next.config.ts"), webNextTpl(ctx));
+
+  await writeFile(
+    path.join(outputDir, "apps", "web", "tsconfig.json"),
+    JSON.stringify({
+      compilerOptions: {
+        target: "ES2017",
+        lib: ["dom", "dom.iterable", "esnext"],
+        allowJs: true,
+        skipLibCheck: true,
+        strict: true,
+        noEmit: true,
+        esModuleInterop: true,
+        module: "esnext",
+        moduleResolution: "bundler",
+        resolveJsonModule: true,
+        isolatedModules: true,
+        jsx: "preserve",
+        incremental: true,
+        plugins: [{ name: "next" }],
+      },
+      include: ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+      exclude: ["node_modules"],
+    }, null, 2),
+  );
+
+  await writeFile(path.join(outputDir, "apps", "web", "app", "globals.css"), "* { box-sizing: border-box; } body { margin: 0; }\n");
+  await writeFile(path.join(outputDir, "apps", "web", ".env.example"), "NEXT_PUBLIC_API_URL=http://localhost:4000\n");
+
+  // ── apps/api (Express + Prisma) ───────────────────────────────
+  const apiPkgTpl = await loadTemplate(`${tplDir}/api-package.json.hbs`);
+  await writeFile(path.join(outputDir, "apps", "api", "package.json"), apiPkgTpl(ctx));
+
+  const apiIndexTpl = await loadTemplate(`${tplDir}/api-index.ts.hbs`);
+  await writeFile(path.join(outputDir, "apps", "api", "src", "index.ts"), apiIndexTpl(ctx));
+
+  const apiDbTpl = await loadTemplate(`${tplDir}/api-db.ts.hbs`);
+  await writeFile(path.join(outputDir, "apps", "api", "src", "db.ts"), apiDbTpl(ctx));
+
+  const apiSchemaTpl = await loadTemplate(`${tplDir}/api-schema.prisma.hbs`);
+  await writeFile(path.join(outputDir, "apps", "api", "prisma", "schema.prisma"), apiSchemaTpl(ctx));
+
+  const apiSeedTpl = await loadTemplate(`${tplDir}/api-seed.ts.hbs`);
+  await writeFile(path.join(outputDir, "apps", "api", "prisma", "seed.ts"), apiSeedTpl(ctx));
+
+  const apiTsCfgTpl = await loadTemplate(`${tplDir}/api-tsconfig.json.hbs`);
+  await writeFile(path.join(outputDir, "apps", "api", "tsconfig.json"), apiTsCfgTpl(ctx));
+
+  await writeFile(path.join(outputDir, "apps", "api", ".env.example"), "DATABASE_URL=postgresql://user:password@localhost:5432/{{projectName}}\nPORT=4000\n");
+
+  // ── DevOps ─────────────────────────────────────────────────────
+  const dockerTpl = await loadTemplate("devops/Dockerfile.turbo.hbs");
+  await writeFile(path.join(outputDir, "Dockerfile"), dockerTpl(ctx));
+
+  const deployTpl = await loadTemplate("devops/deployment.turbo.yaml.hbs");
+  await writeFile(path.join(outputDir, "k8s", "deployment.yaml"), deployTpl(ctx));
+
+  const svcTpl = await loadTemplate("devops/service.turbo.yaml.hbs");
+  await writeFile(path.join(outputDir, "k8s", "service.yaml"), svcTpl(ctx));
+
+  const jenkinsTpl = await loadTemplate("devops/Jenkinsfile.hbs");
+  await writeFile(path.join(outputDir, "Jenkinsfile"), jenkinsTpl(ctx));
+
+  // pnpm workspace config (suppresses pnpm warning about npm workspaces field)
+  await writeFile(
+    path.join(outputDir, "pnpm-workspace.yaml"),
+    "packages:\n  - 'apps/*'\n  - 'packages/*'\n",
+  );
+}
+
 async function loadTemplate(templatePath: string) {
   const fullPath = path.join(TEMPLATES_DIR, templatePath);
   const content = await fs.readFile(fullPath, "utf-8");
@@ -246,6 +350,16 @@ async function loadTemplate(templatePath: string) {
 async function writeFile(filePath: string, content: string) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, content, "utf-8");
+}
+
+// Returns the install / run commands for a given package manager
+function pmCommands(pm: string): { install: string; run: string; exec: string; setup: string } {
+  switch (pm) {
+    case "pnpm": return { install: "npm install -g pnpm && pnpm install --shamefully-hoist", run: "pnpm run", exec: "pnpm exec", setup: "" };
+    case "yarn": return { install: "npm install -g yarn && yarn install", run: "yarn", exec: "yarn", setup: "" };
+    case "bun":  return { install: "npm install -g bun && bun install",   run: "bun run", exec: "bunx", setup: "" };
+    default:     return { install: "npm install", run: "npm run", exec: "npx", setup: "" };
+  }
 }
 
 function generateFrontendPackageJson(input: ScaffoldInput) {

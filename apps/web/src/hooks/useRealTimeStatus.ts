@@ -7,13 +7,17 @@ import type { ProjectStatusEvent, HealthCheckEvent } from "@duckops/shared-types
 export function useRealTimeStatus(projectId: string | null) {
   const [status, setStatus] = useState<ProjectStatusEvent | null>(null);
   const [health, setHealth] = useState<HealthCheckEvent | null>(null);
+  const [subStep, setSubStep] = useState<string | null>(null);
 
   useEffect(() => {
     if (!projectId) return;
 
     const socket = getSocket();
 
-    const onStatus = (data: ProjectStatusEvent) => setStatus(data);
+    const onStatus = (data: ProjectStatusEvent) => {
+      setStatus(data);
+      setSubStep(data.subStep ?? null);
+    };
     const onHealth = (data: HealthCheckEvent) => setHealth(data);
 
     socket.on(`project:${projectId}`, onStatus);
@@ -25,5 +29,5 @@ export function useRealTimeStatus(projectId: string | null) {
     };
   }, [projectId]);
 
-  return { status, health };
+  return { status, health, subStep };
 }

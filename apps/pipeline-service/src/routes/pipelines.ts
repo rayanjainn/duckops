@@ -7,6 +7,7 @@ import {
   getPipeline,
   getPipelineByProject,
   deletePipeline,
+  deletePipelineByProjectId,
 } from "../services/pipelineService";
 import { getLiveBuildInfo } from "../services/jenkinsService";
 import { prisma, DeploymentStatus } from "@duckops/db";
@@ -120,10 +121,20 @@ pipelineRouter.post("/:id/sync", async (req, res, next) => {
   }
 });
 
-// DELETE /api/pipelines/:id
+// DELETE /api/pipelines/:id  (by pipeline ID)
 pipelineRouter.delete("/:id", async (req, res, next) => {
   try {
     await deletePipeline(req.params.id as string);
+    res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/pipelines/project/:projectId  (by project ID — called during project deletion)
+pipelineRouter.delete("/project/:projectId", async (req, res, next) => {
+  try {
+    await deletePipelineByProjectId(req.params.projectId as string);
     res.status(204).send();
   } catch (err) {
     next(err);

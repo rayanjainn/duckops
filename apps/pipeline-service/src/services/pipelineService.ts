@@ -29,7 +29,10 @@ export async function createPipeline(input: CreatePipelineInput) {
     branch: input.branch || "main",
     githubUsername: input.githubUsername,
     githubAccessToken: input.githubAccessToken,
+    packageManager: project.packageManager,
   });
+
+  await prisma.pipeline.deleteMany({ where: { projectId: input.projectId } });
 
   const pipeline = await prisma.pipeline.create({
     data: {
@@ -101,4 +104,12 @@ export async function deletePipeline(pipelineId: string) {
 
   await deleteJenkinsPipeline(pipeline.jenkinsJobName).catch(logger.error);
   await prisma.pipeline.delete({ where: { id: pipelineId } });
+}
+
+export async function deletePipelineByProjectId(projectId: string) {
+  const pipeline = await prisma.pipeline.findFirst({ where: { projectId } });
+  if (!pipeline) return; // no pipeline, nothing to clean up
+
+  await deleteJenkinsPipeline(pipeline.jenkinsJobName).catch(logger.error);
+  await prisma.pipeline.deleteMany({ where: { projectId } });
 }

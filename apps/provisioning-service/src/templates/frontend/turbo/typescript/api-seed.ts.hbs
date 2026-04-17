@@ -1,0 +1,23 @@
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient();
+
+async function main() {
+  console.log("Seeding {{projectName}} database...");
+
+  await prisma.item.deleteMany();
+
+  await prisma.item.createMany({
+    data: [
+      { name: "Hello World", description: "Your first item — edit or delete me" },
+      { name: "Getting Started", description: "Read the README for next steps" },
+      { name: "Deploy Me", description: "Push to main to trigger a Jenkins build" },
+    ],
+  });
+
+  console.log("Seed complete.");
+}
+
+main()
+  .catch(console.error)
+  .finally(() => prisma.$disconnect());

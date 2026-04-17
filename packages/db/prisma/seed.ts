@@ -77,6 +77,15 @@ async function main() {
       version: "5.x",
       compatibleWith: { language: ["typescript", "javascript"] },
     },
+    {
+      layer: Layer.FRAMEWORK,
+      name: "turbo",
+      displayName: "Turborepo Fullstack",
+      description: "Monorepo with Next.js frontend + Express API + Prisma + mock seed data",
+      icon: "turbo",
+      version: "2.x",
+      compatibleWith: { language: ["typescript"] },
+    },
   ];
 
   const databases = [
@@ -148,7 +157,46 @@ async function main() {
     },
   ];
 
-  const allItems = [...languages, ...frameworks, ...databases, ...orms];
+  const packageManagers = [
+    {
+      layer: Layer.PACKAGE_MANAGER,
+      name: "npm",
+      displayName: "npm",
+      description: "The default Node.js package manager, universally available",
+      icon: "npm",
+      version: "10.x",
+      compatibleWith: {},
+    },
+    {
+      layer: Layer.PACKAGE_MANAGER,
+      name: "pnpm",
+      displayName: "pnpm",
+      description: "Fast, disk-efficient package manager using hard links",
+      icon: "pnpm",
+      version: "9.x",
+      compatibleWith: {},
+    },
+    {
+      layer: Layer.PACKAGE_MANAGER,
+      name: "yarn",
+      displayName: "Yarn",
+      description: "Reliable package manager with workspaces support",
+      icon: "yarn",
+      version: "4.x",
+      compatibleWith: {},
+    },
+    {
+      layer: Layer.PACKAGE_MANAGER,
+      name: "bun",
+      displayName: "Bun",
+      description: "All-in-one JS runtime and ultra-fast package manager",
+      icon: "bun",
+      version: "1.x",
+      compatibleWith: {},
+    },
+  ];
+
+  const allItems = [...languages, ...frameworks, ...databases, ...orms, ...packageManagers];
 
   for (const item of allItems) {
     await prisma.templateOption.upsert({

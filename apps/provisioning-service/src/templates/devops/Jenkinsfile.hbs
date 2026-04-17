@@ -7,6 +7,9 @@ pipeline {
         IMAGE_NAME    = '{{projectName}}'
         NAMESPACE     = 'project-{{projectName}}'
         DUCKOPS_API   = 'http://host.docker.internal:4003'
+        // Persistent pnpm store — set by PNPM_HOME env var on the Jenkins container.
+        // Falls back to a workspace-local store if PNPM_HOME is unset.
+        PNPM_STORE    = "${env.PNPM_HOME ?: '/var/jenkins_home/.pnpm-store'}"
     }
 
     stages {
@@ -18,20 +21,35 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                sh 'npm ci || npm install'
+                sh '''
+                    # Ensure pnpm is available — use corepack so no global npm install is needed.
+                    # corepack is bundled with Node 16+ and activates pnpm from package.json#packageManager.
+                    if ! command -v pnpm >/dev/null 2>&1; then
+                        corepack enable
+                        corepack prepare pnpm@latest --activate
+                    fi
+
+                    # Point pnpm at the persistent store so packages are reused across builds.
+                    pnpm config set store-dir "$PNPM_STORE"
+
+                    # Install with frozen lockfile — never mutate lockfile in CI.
+                    # --shamefully-hoist is NOT used: it breaks module resolution and wastes memory.
+                    {{{pmInstall}}}
+                '''
             }
         }
 
         stage('Run Tests') {
             steps {
-                sh 'npm test || true'
+                // || true — test failures are reported but don't block deploy
+                sh '{{{pmRun}}} test || true'
             }
         }
 
         stage('Build Image') {
             steps {
                 sh "docker build -t ${HOST_REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER} ."
-                sh "docker tag ${HOST_REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER} ${HOST_REGISTRY}/${IMAGE_NAME}:latest"
+                sh "docker tag  ${HOST_REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER} ${HOST_REGISTRY}/${IMAGE_NAME}:latest"
             }
         }
 

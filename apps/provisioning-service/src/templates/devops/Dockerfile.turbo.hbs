@@ -1,0 +1,42 @@
+# Stage 1: Build API
+FROM node:22-alpine AS api-builder
+
+WORKDIR /app
+COPY apps/api .
+RUN npm install
+RUN npx prisma generate
+RUN npm run build
+
+# Stage 2: Build Web
+FROM node:22-alpine AS web-builder
+
+WORKDIR /app
+COPY apps/web .
+RUN mkdir -p public
+RUN npm install
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
+
+# Stage 3: Runner — both API (port 4000) and Next.js (port 3000)
+FROM node:22-alpine AS runner
+
+WORKDIR /app
+
+# API
+COPY --from=api-builder /app/dist ./api/dist
+COPY --from=api-builder /app/node_modules ./api/node_modules
+COPY --from=api-builder /app/package*.json ./api/
+COPY --from=api-builder /app/prisma ./api/prisma
+
+# Web
+COPY --from=web-builder /app/public ./web/public
+COPY --from=web-builder /app/.next/standalone ./web/
+COPY --from=web-builder /app/.next/static ./web/.next/static
+
+# Entrypoint script — run API and web concurrently
+RUN printf '#!/bin/sh\nset -e\nPORT=4000 node /app/api/dist/index.js &\nHOSTNAME=0.0.0.0 PORT=3000 node /app/web/server.js &\nwait\n' > /start.sh && chmod +x /start.sh
+
+EXPOSE 4000
+EXPOSE 3000
+
+CMD ["/start.sh"]

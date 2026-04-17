@@ -1,5 +1,7 @@
 import { exec } from "child_process";
 import { promisify } from "util";
+import fs from "fs/promises";
+import os from "os";
 import path from "path";
 import { createLogger } from "@duckops/shared-utils";
 
@@ -20,7 +22,9 @@ const INVENTORY =
 
 const ANSIBLE_BIN =
   process.env.ANSIBLE_BIN ||
-  "/opt/homebrew/Cellar/ansible/13.4.0_1/libexec/bin/ansible-playbook";
+  ["/opt/homebrew/bin/ansible-playbook", "/usr/local/bin/ansible-playbook", "/usr/bin/ansible-playbook"]
+    .find((p) => { try { require("fs").accessSync(p); return true; } catch { return false; } }) ||
+  "ansible-playbook";
 
 const subEnv = {
   ...process.env,
@@ -30,7 +34,7 @@ const subEnv = {
 
 async function isAnsibleAvailable(): Promise<boolean> {
   try {
-    await execAsync(`"${ANSIBLE_BIN}" --version`, { shell: "/bin/sh", env: subEnv });
+    await execAsync(`${ANSIBLE_BIN} --version`, { shell: "/bin/sh", env: subEnv });
     return true;
   } catch {
     return false;
@@ -47,24 +51,36 @@ export async function runAnsible(input: AnsibleInput): Promise<void> {
 
   logger.info(`Running Ansible for project: ${projectName}`);
 
-  const extraVars = JSON.stringify({
-    project_name: projectName,
-    k8s_namespace: namespace,
-    database_url: `postgresql://duckops:duckops123@postgres.${namespace}.svc.cluster.local:5432/${projectName}`,
-  });
+  // Validate inputs: project names must be slugs (alphanumeric + hyphens)
+  const safeName = projectName.replace(/[^a-z0-9-]/g, "");
+  const safeNamespace = namespace.replace(/[^a-z0-9-]/g, "");
+
+  // Pass extra-vars via a temp file using @<file> syntax to avoid shell injection.
+  const tmpVars = path.join(os.tmpdir(), `duckops-ansible-${safeName}-${Date.now()}.json`);
+  await fs.writeFile(
+    tmpVars,
+    JSON.stringify({
+      project_name: safeName,
+      k8s_namespace: safeNamespace,
+      database_url: `postgresql://duckops:duckops123@postgres.${safeNamespace}.svc.cluster.local:5432/${safeName}`,
+    }),
+    { mode: 0o600 },
+  );
 
   try {
     const { stdout, stderr } = await execAsync(
-      `"${ANSIBLE_BIN}" playbooks/deploy-app.yml -i ${INVENTORY} --extra-vars '${extraVars}' --connection=local`,
+      `${ANSIBLE_BIN} playbooks/deploy-app.yml -i ${INVENTORY} --extra-vars @${tmpVars} --connection=local`,
       { cwd: ANSIBLE_DIR, shell: "/bin/sh", env: subEnv },
     );
 
     if (stdout) logger.info(`Ansible stdout: ${stdout}`);
     if (stderr) logger.warn(`Ansible stderr: ${stderr}`);
 
-    logger.info(`Ansible complete for: ${projectName}`);
+    logger.info(`Ansible complete for: ${safeName}`);
   } catch (error: any) {
-    logger.error(`Ansible failed for ${projectName}: ${error.message}`);
+    logger.error(`Ansible failed for ${safeName}: ${error.message}`);
     throw new Error(`Ansible configuration failed: ${error.message}`);
+  } finally {
+    await fs.rm(tmpVars, { force: true });
   }
 }
