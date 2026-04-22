@@ -34,7 +34,7 @@ export async function scaffoldProject(input: ScaffoldInput): Promise<{ outputDir
     ? input.framework === "nextjs" ? "/api/health" : "/health"
     : "/health";
   const pm = pmCommands(input.packageManager);
-  const ctx = { ...input, port, healthPath, pmInstall: pm.install, pmRun: pm.run, pmExec: pm.exec, pmSetup: pm.setup };
+  const ctx = { ...input, port, healthPath, pmInstall: pm.install, pmInstallProd: pm.installProd, pmRun: pm.run, pmExec: pm.exec, pmSetup: pm.setup };
 
   if (input.framework === "turbo") {
     await scaffoldTurbo(input, ctx, outputDir);
@@ -353,12 +353,12 @@ async function writeFile(filePath: string, content: string) {
 }
 
 // Returns the install / run commands for a given package manager
-function pmCommands(pm: string): { install: string; run: string; exec: string; setup: string } {
+function pmCommands(pm: string): { install: string; installProd: string; run: string; exec: string; setup: string } {
   switch (pm) {
-    case "pnpm": return { install: "npm install -g pnpm && pnpm install --shamefully-hoist", run: "pnpm run", exec: "pnpm exec", setup: "" };
-    case "yarn": return { install: "npm install -g yarn && yarn install", run: "yarn", exec: "yarn", setup: "" };
-    case "bun":  return { install: "npm install -g bun && bun install",   run: "bun run", exec: "bunx", setup: "" };
-    default:     return { install: "npm install", run: "npm run", exec: "npx", setup: "" };
+    case "pnpm": return { install: "npm install -g pnpm && pnpm install", installProd: "npm install -g pnpm && pnpm install --prod", run: "pnpm run", exec: "pnpm exec", setup: "" };
+    case "yarn": return { install: "npm install -g yarn && yarn install", installProd: "npm install -g yarn && yarn install --production", run: "yarn", exec: "yarn", setup: "" };
+    case "bun":  return { install: "npm install -g bun && bun install",   installProd: "npm install -g bun && bun install --production", run: "bun run", exec: "bunx", setup: "" };
+    default:     return { install: "npm install", installProd: "npm install --omit=dev", run: "npm run", exec: "npx", setup: "" };
   }
 }
 

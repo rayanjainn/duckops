@@ -25,7 +25,7 @@ export function Header({ title, description, actions }: HeaderProps) {
         <button
           onClick={toggle}
           title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-          className="w-8 h-8 rounded-lg border border-border-2 bg-surface-3 flex items-center justify-center text-muted-2 hover:text-white hover:bg-surface-4 hover:border-muted transition-all"
+          className="w-8 h-8 rounded-lg border border-border-2 bg-surface-3 flex items-center justify-center text-muted-2 hover:text-foreground hover:bg-surface-4 hover:border-muted transition-all"
         >
           {theme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
         </button>

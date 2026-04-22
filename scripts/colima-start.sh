@@ -24,7 +24,7 @@ err()  { echo -e "  ${RED}✗${RESET}  $*" >&2; }
 PROFILE="${COLIMA_PROFILE:-duckops}"
 CPU="${COLIMA_CPU:-6}"
 MEMORY="${COLIMA_MEMORY:-10}"   # GiB
-DISK="${COLIMA_DISK:-80}"       # GiB
+DISK="${COLIMA_DISK:-40}"       # GiB
 BUILDER_NAME="duckops-builder"
 
 echo ""

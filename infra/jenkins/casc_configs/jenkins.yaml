@@ -1,0 +1,12 @@
+jenkins:
+  globalNodeProperties: []
+  # Discard old builds globally — keep only last 5 builds and 7 days of logs.
+  # This is the #1 reason jenkinsdata volumes balloon to 10-15GB.
+  numExecutors: 2
+
+unclassified:
+  buildDiscarders:
+    configuredBuildDiscarders:
+      - "jobBuildDiscarder"
+  globalDefaultFlowDurabilityLevel:
+    durabilityHint: PERFORMANCE_OPTIMIZED

@@ -6,7 +6,7 @@ export default function NewProjectPage() {
     <div className="min-h-screen bg-surface">
       <Header
         title="New Project"
-        description="Pick your tech stack — DuckOps handles scaffolding, deployment, and CI/CD"
+        description="AI-recommended or manual stack — DuckOps handles scaffolding, deployment, and CI/CD"
       />
       <CreateProjectForm />
     </div>

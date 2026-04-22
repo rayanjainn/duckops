@@ -5,6 +5,7 @@ export type ProjectStatus =
   | "SCAFFOLDING"
   | "PROVISIONING"
   | "CONFIGURING"
+  | "CREATING_REPO"
   | "PIPELINE_READY"
   | "DEPLOYING"
   | "RUNNING"
@@ -108,6 +109,7 @@ export interface Deployment {
   deployLogs?: string;
   startedAt: string;
   completedAt?: string;
+  commitSha?: string;
 }
 
 export interface HealthCheck {
@@ -132,6 +134,7 @@ export interface CreateProjectInput {
   orm: string;
   packageManager: string;
   repoVisibility?: "public" | "private";
+  aiPrompt?: string;
 }
 
 export interface CreateProjectResponse {

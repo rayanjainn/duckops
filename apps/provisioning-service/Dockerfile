@@ -1,9 +1,7 @@
 # syntax=docker/dockerfile:1.7
-# ─── Build stage ─────────────────────────────────────────────────────────────
 FROM node:22-alpine AS builder
 
 WORKDIR /app
-
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json ./
@@ -21,35 +19,22 @@ COPY packages ./packages
 RUN cd packages/db && pnpm prisma generate
 RUN pnpm turbo build --filter=provisioning-service
 
-# ─── Runtime stage ────────────────────────────────────────────────────────────
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+    pnpm deploy --filter=provisioning-service --prod /deploy && \
+    mkdir -p /deploy/node_modules/.prisma && \
+    cp -r packages/db/src/generated/client /deploy/node_modules/.prisma/client && \
+    cp -r apps/provisioning-service/src/templates /deploy/dist/templates
+
+# ─── Runtime ──────────────────────────────────────────────────────────────────
 FROM node:22-alpine AS runtime
 
-# git is required for repo operations (init, push)
 RUN apk add --no-cache git
-
-RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
-
 RUN addgroup -S duckops && adduser -S duckops -G duckops
-
 WORKDIR /app
 
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/pnpm-workspace.yaml ./
-COPY --from=builder /app/pnpm-lock.yaml ./
-COPY --from=builder /app/packages ./packages
-COPY --from=builder /app/apps/provisioning-service/package.json ./apps/provisioning-service/
-COPY --from=builder /app/apps/provisioning-service/dist ./apps/provisioning-service/dist
-# Templates are loaded at runtime from dist/templates
-COPY --from=builder /app/apps/provisioning-service/src/templates ./apps/provisioning-service/dist/templates
-
-RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile --prod && \
-    cd packages/db && pnpm prisma generate
-
-# /tmp/duckops-projects is where scaffolded code is written — must be writable
+COPY --from=builder /deploy ./
 RUN mkdir -p /tmp/duckops-projects && chown -R duckops:duckops /app /tmp/duckops-projects
 USER duckops
 
 EXPOSE 4002
-
-CMD ["node", "apps/provisioning-service/dist/index.js"]
+CMD ["node", "dist/index.js"]

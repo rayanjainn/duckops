@@ -59,9 +59,11 @@ services:
       - "50000:50000"
     environment:
       JAVA_OPTS: "-Djenkins.install.runSetupWizard=false -Xmx1g -Xms512m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
-      # Give pnpm a persistent store inside the Jenkins container so
-      # packages are reused across builds instead of re-downloaded every time.
       PNPM_HOME: /var/jenkins_home/.pnpm-store
+      # Keep only last 5 builds and discard workspaces after build completes.
+      # Prevents jenkinsdata volume from growing unboundedly (was biggest storage sink).
+      JENKINS_OPTS: "--httpPort=8080"
+      CASC_JENKINS_CONFIG: /var/jenkins_home/casc_configs
     user: root
     networks:
       - default
@@ -70,7 +72,6 @@ services:
       - jenkinsdata:/var/jenkins_home
       - /var/run/docker.sock:/var/run/docker.sock
       - ${HOME}/.kube:/root/.kube-host:ro
-      # Persistent pnpm content-addressable store shared across all pipeline builds
       - jenkins-pnpm-store:/var/jenkins_home/.pnpm-store
     deploy:
       resources:
@@ -220,6 +221,37 @@ services:
         reservations:
           memory: 64m
 
+  ai-service:
+    build:
+      context: .
+      dockerfile: apps/ai-service/Dockerfile
+      args:
+        BUILDKIT_INLINE_CACHE: "1"
+    container_name: duckops-ai
+    restart: unless-stopped
+    ports:
+      - "4005:4005"
+    environment:
+      DATABASE_URL: postgresql://duckops:duckops123@postgres:5432/duckops
+      PORT: "4005"
+      NODE_ENV: production
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
+      OLLAMA_CODE_MODEL: ${OLLAMA_CODE_MODEL:-qwen2.5-coder:7b}
+      OLLAMA_STACK_MODEL: ${OLLAMA_STACK_MODEL:-qwen2.5-coder:7b}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    develop:
+      watch:
+        - action: rebuild
+          path: apps/ai-service/src
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 128m
+
   # ─── API Gateway ─────────────────────────────────────────────
   nginx:
     image: nginx:1.27-alpine
@@ -234,6 +266,7 @@ services:
       - provisioning-service
       - pipeline-service
       - health-service
+      - ai-service
     deploy:
       resources:
         limits:

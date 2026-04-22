@@ -111,6 +111,18 @@ else
 fi
 
 # Backfill any env vars added after initial setup
+# Update or add an env var in .env
+update_env() {
+  local key="$1" val="$2"
+  if grep -q "^${key}=" "$ROOT/.env"; then
+    # Portable sed for Mac and Linux
+    sed -i.bak "/^${key}=/s|=.*|=${val}|" "$ROOT/.env" && rm -f "$ROOT/.env.bak"
+  else
+    echo "${key}=${val}" >> "$ROOT/.env"
+  fi
+}
+
+# Add env var only if missing
 backfill_env() {
   local key="$1" val="$2"
   if ! grep -q "^${key}=" "$ROOT/.env" 2>/dev/null; then
@@ -166,6 +178,12 @@ if command -v k3d >/dev/null 2>&1; then
       ok "k3d registry exists"
     fi
 
+    # Ghost cluster check: if list didn't see it but a previous attempt failed, 
+    # 'k3d cluster create' might still throw a "FATA: already exists" error.
+    if ! k3d cluster list 2>/dev/null | grep -q "duckops"; then
+      k3d cluster delete duckops >/dev/null 2>&1 || true
+    fi
+
     echo "  → Creating k3d cluster (this takes ~60s)..."
     k3d cluster create duckops \
       --port "8080:80@loadbalancer" \
@@ -216,6 +234,7 @@ echo ""
 # Compose v2 builds services in parallel automatically when BuildKit is active.
 # Pass --builder explicitly so the docker-container driver (cache mount support)
 # is used even if the active context builder is still set to 'docker'.
+BUILDER_NAME="duckops-builder"
 BUILD_CMD="docker compose build"
 if docker buildx inspect "$BUILDER_NAME" >/dev/null 2>&1; then
   BUILD_CMD="docker compose build --builder $BUILDER_NAME"
@@ -229,9 +248,12 @@ step "Starting Jenkins"
 docker compose up jenkins -d
 
 echo "  Waiting for Jenkins (up to 120s)..."
+# Bash 3.2 (macOS default) can be picky about parentheses in [[ =~ ]]
+# Moving the regex to a variable is the most compatible way.
+JENKINS_READY_REG="(200|403|302)"
 for i in $(seq 1 40); do
   CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8085/login 2>/dev/null || true)
-  if [[ "$CODE" =~ ^(200|403|302)$ ]]; then
+  if [[ "$CODE" =~ $JENKINS_READY_REG ]]; then
     ok "Jenkins is up (HTTP $CODE)"
     break
   fi
@@ -239,83 +261,115 @@ for i in $(seq 1 40); do
   sleep 3
 done
 
-echo ""
-echo -e "${BOLD}┌─────────────────────────────────────────────────────────────────┐${RESET}"
-echo -e "${BOLD}│  Jenkins first-run setup (skip if already done)                 │${RESET}"
-echo -e "${BOLD}└─────────────────────────────────────────────────────────────────┘${RESET}"
-echo ""
-echo "  1. Get the initial admin password:"
-echo "       docker exec duckops-jenkins cat /var/jenkins_home/secrets/initialAdminPassword"
-echo ""
-echo "  2. Open http://localhost:8085 and complete the setup wizard."
-echo "     Install 'suggested plugins', create an admin user."
-echo ""
-echo "  3. Create an API token:"
-echo "     Jenkins → [admin user] → Configure → API Token → Add new Token"
-echo ""
-echo "  4. Set the token in .env:"
-echo "     JENKINS_TOKEN=<your token>"
-echo ""
+step "Automating Jenkins setup"
+echo "  → Checking Jenkins status..."
 
-read -rp "  Has Jenkins been configured and JENKINS_TOKEN set in .env? [y/N] " jenkinsDone
-echo ""
+# Try to see if existing token works
+JENKINS_USER=${JENKINS_USER:-admin}
+JENKINS_TOKEN=${JENKINS_TOKEN:-}
+READY=0
 
-if [[ "$jenkinsDone" =~ ^[Yy]$ ]]; then
-  # Reload env in case JENKINS_TOKEN was just set
-  set -a; source "$ROOT/.env"; set +a
-
-  step "Starting all services"
-  docker compose up -d
-  ok "All services started"
-
-  # ─── 10. Copy kubeconfig into Jenkins + health-service ─────────────────────
-  if command -v k3d >/dev/null 2>&1; then
-    step "Wiring kubeconfig into Jenkins and health-service"
-    K3D_SERVER_IP=$(docker inspect k3d-duckops-server-0 \
-      --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' 2>/dev/null \
-      | head -1 || true)
-
-    if [ -n "$K3D_SERVER_IP" ]; then
-      TMPKUBE=$(mktemp)
-      k3d kubeconfig get duckops 2>/dev/null \
-        | sed "s|https://0.0.0.0:[0-9]*|https://${K3D_SERVER_IP}:6443|g" \
-        > "$TMPKUBE"
-
-      docker exec duckops-jenkins mkdir -p /root/.kube 2>/dev/null || true
-      if docker cp "$TMPKUBE" duckops-jenkins:/root/.kube/config; then
-        ok "kubeconfig copied to Jenkins (server: ${K3D_SERVER_IP}:6443)"
-      else
-        warn "kubeconfig copy to Jenkins failed — run manually later"
-      fi
-
-      docker exec duckops-health mkdir -p /root/.kube 2>/dev/null || true
-      if docker cp "$TMPKUBE" duckops-health:/root/.kube/config; then
-        ok "kubeconfig copied to health-service (server: ${K3D_SERVER_IP}:6443)"
-      else
-        warn "kubeconfig copy to health-service failed — run manually later"
-      fi
-
-      rm -f "$TMPKUBE"
-    else
-      warn "Could not detect k3d server IP — kubeconfig not copied"
-      echo "  Run manually: k3d kubeconfig get duckops | sed 's|0.0.0.0:...|<k3d-ip>:6443|' | docker exec -i duckops-jenkins tee /root/.kube/config"
-    fi
+if [[ -n "$JENKINS_TOKEN" ]]; then
+  if curl -s -f -u "${JENKINS_USER}:${JENKINS_TOKEN}" http://localhost:8085/api/json >/dev/null 2>&1; then
+    ok "Jenkins is already configured and token is valid."
+    READY=1
   fi
-else
-  echo "  Skipping remaining services. Once Jenkins is configured, run:"
-  echo "    docker compose up -d"
+fi
+
+if [ "$READY" -eq 0 ]; then
+  echo "  → Provisioning admin user and generating API token..."
+  GROOVY_TMP=$(mktemp)
+  cat <<EOF > "$GROOVY_TMP"
+import jenkins.model.*
+import hudson.security.*
+import jenkins.security.*
+import jenkins.security.apitoken.*
+def instance = Jenkins.get()
+def hudsonRealm = new HudsonPrivateSecurityRealm(false)
+instance.setSecurityRealm(hudsonRealm)
+if (User.get('admin', false) == null) {
+    hudsonRealm.createAccount('admin', 'admin')
+}
+def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
+strategy.setAllowAnonymousRead(false)
+instance.setAuthorizationStrategy(strategy)
+instance.save()
+def user = User.get('admin')
+def prop = user.getProperty(ApiTokenProperty.class)
+def token = prop.tokenStore.generateNewToken('duckops-token').plainValue
+user.save()
+println 'TOKEN:' + token
+EOF
+
+  # Try anonymous first (fresh install), then try with existing credentials (retry/update)
+  TOKEN_OUTPUT=$(curl -s -X POST http://localhost:8085/scriptText --data-urlencode "script=$(cat "$GROOVY_TMP")" 2>/dev/null || \
+                 curl -s -u "${JENKINS_USER}:${JENKINS_TOKEN}" -X POST http://localhost:8085/scriptText --data-urlencode "script=$(cat "$GROOVY_TMP")" 2>/dev/null || \
+                 echo "Error")
+  rm -f "$GROOVY_TMP"
+
+  if [[ "$TOKEN_OUTPUT" == *"TOKEN:"* ]]; then
+    NEW_TOKEN=$(echo "$TOKEN_OUTPUT" | grep 'TOKEN:' | cut -d: -f2 | tr -d '\r\n')
+    update_env "JENKINS_USER" "admin"
+    update_env "JENKINS_TOKEN" "$NEW_TOKEN"
+    ok "Jenkins automated setup complete. Token updated in .env"
+  elif [[ "$TOKEN_OUTPUT" == *"Authentication required"* && "$READY" -eq 1 ]]; then
+    ok "Jenkins is already locked down (Existing token remains valid)"
+  else
+    warn "Jenkins automation returned unexpected output (might be already configured)"
+  fi
+fi
+
+# Reload env to pick up the brand new JENKINS_TOKEN
+set -a; source "$ROOT/.env"; set +a
+
+step "Starting remaining services"
+docker compose up -d
+ok "All services started"
+
+# ─── 10. Copy kubeconfig into Jenkins + health-service ─────────────────────
+if command -v k3d >/dev/null 2>&1; then
+  step "Wiring kubeconfig into Jenkins and health-service"
+  K3D_SERVER_IP=$(docker inspect k3d-duckops-server-0 \
+    --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' 2>/dev/null \
+    | head -1 || true)
+
+  if [ -n "$K3D_SERVER_IP" ]; then
+    TMPKUBE=$(mktemp)
+    k3d kubeconfig get duckops 2>/dev/null \
+      | sed "s|https://0.0.0.0:[0-9]*|https://${K3D_SERVER_IP}:6443|g" \
+      > "$TMPKUBE"
+
+    docker exec duckops-jenkins mkdir -p /root/.kube 2>/dev/null || true
+    if docker cp "$TMPKUBE" duckops-jenkins:/root/.kube/config; then
+      ok "kubeconfig copied to Jenkins - server: ${K3D_SERVER_IP}:6443"
+    else
+      warn "kubeconfig copy to Jenkins failed - run manually later"
+    fi
+
+    docker exec duckops-health mkdir -p /root/.kube 2>/dev/null || true
+    if docker cp "$TMPKUBE" duckops-health:/root/.kube/config; then
+      ok "kubeconfig copied to health-service - server: ${K3D_SERVER_IP}:6443"
+    else
+      warn "kubeconfig copy to health-service failed - run manually later"
+    fi
+
+    rm -f "$TMPKUBE"
+  else
+    warn "Could not detect k3d server IP - kubeconfig not copied"
+    echo "  Run manually: k3d kubeconfig get duckops | sed 's|0.0.0.0:...|<k3d-ip>:6443|' | docker exec -i duckops-jenkins tee /root/.kube/config"
+  fi
 fi
 
 # ─── Done ─────────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}${GREEN}✓ Setup complete!${RESET}"
 echo ""
-echo "  Frontend (Next.js dev) : pnpm turbo dev"
+echo "  Frontend Next.js dev   : pnpm turbo dev"
 echo "  Frontend URL           : http://localhost:3000"
 echo "  API Gateway            : http://localhost:4000"
-echo "  Jenkins                : http://localhost:8085"
-echo "  Deployed apps          : http://<project-name>.localhost:8080"
+echo "  Jenkins URL            : http://localhost:8085"
+echo "  Deployed apps          : http://localhost:8080"
 echo "  Prisma Studio          : cd packages/db && pnpm prisma studio"
 echo ""
-echo "  Tip: run  scripts/colima-start.sh  after a reboot to restart Colima."
+echo "  Tip: run scripts/colima-start.sh after a reboot to restart Colima."
 echo ""

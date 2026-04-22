@@ -20,7 +20,7 @@ export function StatusBadge({ status, message, size = "default" }: StatusBadgePr
           <span className={cn("absolute inset-0 rounded-full animate-ping-slow opacity-70", dot)} />
         )}
       </span>
-      <span className={cn("font-medium text-white", size === "sm" ? "text-xs" : "text-sm")}>{label}</span>
+      <span className={cn("font-medium text-foreground", size === "sm" ? "text-xs" : "text-sm")}>{label}</span>
       {message && (
         <span className={cn("text-muted truncate max-w-[240px]", size === "sm" ? "text-xs" : "text-xs")}>
           — {message}

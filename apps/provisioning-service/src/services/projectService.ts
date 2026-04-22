@@ -22,6 +22,7 @@ export interface CreateProjectInput {
   orm: string;
   packageManager: string;
   repoVisibility?: "public" | "private";
+  aiPrompt?: string;
   userId: string;
   githubUsername: string;
   githubAccessToken: string;
@@ -39,6 +40,7 @@ export async function createProject(input: CreateProjectInput) {
       orm: input.orm,
       packageManager: input.packageManager,
       repoVisibility: input.repoVisibility ?? "private",
+      aiPrompt: input.aiPrompt,
       userId: input.userId,
       status: ProjectStatus.INITIALIZING,
       statusMessage: "Project registered. Starting scaffold...",
@@ -109,6 +111,38 @@ async function provisionProject(
     `Repository ready: ${repoResult.repoUrl}`,
     "Push scaffolded code to GitHub",
   );
+
+  // ── NEW: Apply AI Prompt if present ──
+  if (input.aiPrompt) {
+    await updateStatus(projectId, ProjectStatus.PROVISIONING, "AI is customizing your project...", "Invoking AI Service");
+    try {
+      const AI_SERVICE = process.env.AI_SERVICE_URL || "http://localhost:4005";
+      const aiRes = await fetch(`${AI_SERVICE}/api/generate/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          prompt: input.aiPrompt,
+        }),
+      });
+
+      if (!aiRes.ok) {
+        logger.warn(`AI customization failed: ${aiRes.statusText}`);
+      } else {
+        // Wait for streaming to finish (basic drain)
+        const reader = aiRes.body?.getReader();
+        if (reader) {
+          while (true) {
+            const { done } = await reader.read();
+            if (done) break;
+          }
+        }
+        logger.info(`AI customization complete for ${projectId}`);
+      }
+    } catch (err: any) {
+      logger.warn(`AI service call failed: ${err.message}`);
+    }
+  }
 
   // Step 3: Build Docker image and push to local registry
   await updateStatus(projectId, ProjectStatus.PROVISIONING, "Building Docker image...", "docker build");
@@ -211,6 +245,7 @@ export async function retryProject(
     database: project.database,
     orm: project.orm,
     packageManager: project.packageManager,
+    aiPrompt: project.aiPrompt ?? undefined,
     userId: project.userId,
     githubUsername: user.githubUsername,
     githubAccessToken: user.githubAccessToken,

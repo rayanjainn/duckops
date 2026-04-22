@@ -295,7 +295,19 @@ if $NUKE_COLIMA; then
     if colima status "$PROFILE" 2>/dev/null | grep -q "Running"; then
       colima stop "$PROFILE" 2>/dev/null && ok "Colima profile '$PROFILE' stopped" || warn "Colima stop failed"
     else
-      skip "Colima profile '$PROFILE' is not running"
+      ok "Colima profile '$PROFILE' already stopped"
+    fi
+    # Delete the VM entirely — frees the full disk allocation (up to 80GB)
+    if colima list 2>/dev/null | grep -q "^$PROFILE "; then
+      colima delete "$PROFILE" 2>/dev/null && ok "Colima VM '$PROFILE' deleted (disk reclaimed)" || warn "Colima delete failed"
+    else
+      skip "Colima VM '$PROFILE' not found"
+    fi
+
+    # Nuclear cleanup: Remote the entire .colima directory to catch orphaned disks
+    if [ -d "$HOME/.colima" ]; then
+      rm -rf "$HOME/.colima"
+      ok "Full Colima storage (~/.colima) wiped (captured orphaned disks)"
     fi
   else
     skip "colima not installed"
@@ -319,7 +331,7 @@ if $NUKE_DEPS; then
   echo "    • node_modules + pnpm store (--deps)"
 fi
 if $NUKE_COLIMA; then
-  echo "    • Colima VM stopped (--colima)"
+  echo "    • Colima VM stopped and deleted (--colima) — full disk reclaimed"
 fi
 echo ""
 
@@ -333,10 +345,9 @@ fi
 if command -v colima >/dev/null 2>&1 && ! $NUKE_COLIMA; then
   PROFILE="${COLIMA_PROFILE:-duckops}"
   if colima status "$PROFILE" 2>/dev/null | grep -q "Running"; then
-    echo -e "  ${YELLOW}Note:${RESET} Colima VM is still running. The VM disk is fixed at 80GB."
-    echo "  Stopping Colima does NOT shrink that disk — only deleting the VM does."
-    echo "  To stop Colima: scripts/teardown-local.sh --colima"
-    echo "  To delete Colima VM entirely: colima delete $PROFILE  (reclaims all disk)"
+    echo -e "  ${YELLOW}Note:${RESET} Colima VM is still running (use --colima to stop and delete it)."
+    echo "  The VM disk allocation (~80GB) is only freed when the VM is deleted."
+    echo "  To nuke everything including Colima: scripts/teardown-local.sh --all"
     echo ""
   fi
 fi

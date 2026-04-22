@@ -20,6 +20,11 @@ GEMINI.md
 
 # Prisma
 packages/db/prisma/migrations/*.sql
+packages/db/src/generated/
+
+# TypeScript
+*.tsbuildinfo
+
 
 # OS
 .DS_Store

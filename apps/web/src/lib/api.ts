@@ -10,6 +10,7 @@ import { getToken, clearSession } from "@/lib/auth";
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4002";
 const PIPELINE_BASE = process.env.NEXT_PUBLIC_PIPELINE_URL || "http://localhost:4003";
 const CATALOG_BASE = process.env.NEXT_PUBLIC_CATALOG_URL || "http://localhost:4001";
+export const AI_BASE = process.env.NEXT_PUBLIC_AI_URL || "http://localhost:4005";
 
 export const api = axios.create({
   baseURL: API_BASE,
@@ -93,6 +94,26 @@ export const pipelineApi = {
 
   liveUrl: (projectId: string): string =>
     `${PIPELINE_BASE}/api/pipelines/project/${projectId}/live`,
+};
+
+export interface StackRecommendation {
+  language: string;
+  framework: string;
+  database: string;
+  orm: string;
+  packageManager: string;
+  reasoning: string;
+}
+
+export const aiApi = {
+  recommendStack: (prompt: string): Promise<StackRecommendation> =>
+    axios.post(`${AI_BASE}/api/stack/recommend`, { prompt }).then((r) => r.data),
+
+  getSessions: (projectId: string) =>
+    axios.get(`${AI_BASE}/api/generate/sessions/${projectId}`).then((r) => r.data),
+
+  getMessages: (projectId: string, sessionId: string) =>
+    axios.get(`${AI_BASE}/api/generate/sessions/${projectId}/${sessionId}`).then((r) => r.data),
 };
 
 export interface BuildStage {

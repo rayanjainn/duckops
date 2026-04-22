@@ -1,9 +1,7 @@
 # syntax=docker/dockerfile:1.7
-# ─── Build stage ─────────────────────────────────────────────────────────────
 FROM node:22-alpine AS builder
 
 WORKDIR /app
-
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json ./
@@ -21,30 +19,25 @@ COPY packages ./packages
 RUN cd packages/db && pnpm prisma generate
 RUN pnpm turbo build --filter=health-service
 
-# ─── Runtime stage ────────────────────────────────────────────────────────────
-FROM node:22-alpine AS runtime
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+    pnpm deploy --filter=health-service --prod /deploy && \
+    mkdir -p /deploy/node_modules/.prisma && \
+    cp -r packages/db/src/generated/client /deploy/node_modules/.prisma/client
 
-# kubectl — needed to exec health checks inside k3d pods
+# ─── kubectl binary (pinned, single layer, no curl left in image) ─────────────
+FROM node:22-alpine AS kubectl-dl
 RUN apk add --no-cache curl && \
     KUBECTL_VER=$(curl -fsSL https://dl.k8s.io/release/stable.txt) && \
-    curl -fsSL "https://dl.k8s.io/release/${KUBECTL_VER}/bin/linux/amd64/kubectl" -o /usr/local/bin/kubectl && \
-    chmod +x /usr/local/bin/kubectl
+    curl -fsSL "https://dl.k8s.io/release/${KUBECTL_VER}/bin/linux/amd64/kubectl" \
+         -o /kubectl && chmod +x /kubectl
 
-RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+# ─── Runtime ──────────────────────────────────────────────────────────────────
+FROM node:22-alpine AS runtime
 
+COPY --from=kubectl-dl /kubectl /usr/local/bin/kubectl
 WORKDIR /app
 
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/pnpm-workspace.yaml ./
-COPY --from=builder /app/pnpm-lock.yaml ./
-COPY --from=builder /app/packages ./packages
-COPY --from=builder /app/apps/health-service/package.json ./apps/health-service/
-COPY --from=builder /app/apps/health-service/dist ./apps/health-service/dist
-
-RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile --prod && \
-    cd packages/db && pnpm prisma generate
+COPY --from=builder /deploy ./
 
 EXPOSE 4004
-
-CMD ["node", "apps/health-service/dist/index.js"]
+CMD ["node", "dist/index.js"]

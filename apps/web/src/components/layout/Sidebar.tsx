@@ -4,7 +4,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard,
   Folder,
   Plus,
   BookOpen,
@@ -12,13 +11,14 @@ import {
   ChevronLeft,
   ChevronRight,
   GitBranch,
+  GraduationCap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useState } from "react";
+import { resetAndRunTour } from "@/components/tutorial/OnboardingTour";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/projects", label: "Projects", icon: Folder, exact: true },
   { href: "/projects/new", label: "New Project", icon: Plus, exact: true },
   { href: "/templates", label: "Templates", icon: BookOpen, exact: true },
@@ -43,7 +43,7 @@ export function Sidebar() {
     >
       {/* Logo */}
       <div className={cn("flex items-center border-b border-border h-16", collapsed ? "justify-center px-0" : "px-5 gap-3")}>
-        <Link href="/dashboard" className="flex items-center gap-3 shrink-0">
+        <Link href="/projects" className="flex items-center gap-3 shrink-0">
           <div className="w-8 h-8 rounded-lg bg-amber-600 flex items-center justify-center shrink-0">
             <GitBranch className="h-4 w-4 text-white" />
           </div>
@@ -87,6 +87,21 @@ export function Sidebar() {
       >
         {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
       </button>
+
+      {/* Tutorial button */}
+      <div className={cn("px-3 pb-2", collapsed && "px-2")}>
+        <button
+          onClick={() => resetAndRunTour(pathname)}
+          title="Run tutorial"
+          className={cn(
+            "flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-muted-2 hover:bg-surface-3 hover:text-foreground transition-all",
+            collapsed && "justify-center px-0",
+          )}
+        >
+          <GraduationCap className="h-4 w-4 shrink-0" />
+          {!collapsed && <span>Run Tutorial</span>}
+        </button>
+      </div>
 
       {/* User footer */}
       <div className={cn("p-3 border-t border-border", collapsed && "px-2")}>

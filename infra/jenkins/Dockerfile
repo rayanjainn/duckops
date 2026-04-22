@@ -30,15 +30,23 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
 # Skip setup wizard
 ENV JAVA_OPTS="-Djenkins.install.runSetupWizard=false"
 
-# Install Jenkins plugins
+# Install Jenkins plugins (configuration-as-code enables global build discarder)
 RUN jenkins-plugin-cli --plugins \
   workflow-aggregator \
   git \
   github \
-  pipeline-stage-view
+  pipeline-stage-view \
+  configuration-as-code \
+  build-discarder \
+  ws-cleanup
 
-# Disable CSRF on startup
+# JCasC config — sets global build discarder (keep 5 builds) to prevent volume bloat
+COPY casc_configs /var/jenkins_home/casc_configs
+ENV CASC_JENKINS_CONFIG=/var/jenkins_home/casc_configs
+
+# Startup Groovy scripts
 COPY disable-csrf.groovy /usr/share/jenkins/ref/init.groovy.d/disable-csrf.groovy
+COPY casc_configs/cleanup-workspaces.groovy /usr/share/jenkins/ref/init.groovy.d/cleanup-workspaces.groovy
 
 # Kubeconfig setup script — patches 0.0.0.0 to k3d's Docker network IP at startup
 COPY setup-kubeconfig.sh /usr/local/bin/setup-kubeconfig.sh

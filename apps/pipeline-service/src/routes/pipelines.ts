@@ -111,6 +111,21 @@ pipelineRouter.post("/:id/build", async (req, res, next) => {
   }
 });
 
+// POST /api/pipelines/project/:projectId/trigger — trigger build by project ID
+pipelineRouter.post("/project/:projectId/trigger", async (req, res, next) => {
+  try {
+    const pipeline = await getPipelineByProject(req.params.projectId as string);
+    if (!pipeline) {
+      res.status(404).json({ error: "Pipeline not found for project" });
+      return;
+    }
+    const result = await triggerPipelineBuild(pipeline.id);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /api/pipelines/:id/sync
 pipelineRouter.post("/:id/sync", async (req, res, next) => {
   try {

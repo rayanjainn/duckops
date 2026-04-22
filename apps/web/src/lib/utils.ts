@@ -21,6 +21,7 @@ export function getStatusColor(status: ProjectStatus): string {
     SCAFFOLDING: "bg-blue-500",
     PROVISIONING: "bg-purple-500",
     CONFIGURING: "bg-indigo-500",
+    CREATING_REPO: "bg-orange-500",
     PIPELINE_READY: "bg-cyan-500",
     DEPLOYING: "bg-yellow-500",
     RUNNING: "bg-green-500",
@@ -39,5 +40,5 @@ export function getStatusLabel(status: ProjectStatus): string {
 }
 
 export function isActiveStatus(status: ProjectStatus): boolean {
-  return ["INITIALIZING", "SCAFFOLDING", "PROVISIONING", "CONFIGURING", "PIPELINE_READY", "DEPLOYING"].includes(status);
+  return ["INITIALIZING", "SCAFFOLDING", "PROVISIONING", "CONFIGURING", "CREATING_REPO", "PIPELINE_READY", "DEPLOYING"].includes(status);
 }

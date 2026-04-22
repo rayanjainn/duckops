@@ -95,5 +95,10 @@ pipeline {
             """
             echo 'Deployment failed!'
         }
+        always {
+            // Wipe workspace after every build — source is in GitHub, no need
+            // to keep it on disk. Prevents jenkinsdata volume bloat.
+            cleanWs()
+        }
     }
 }

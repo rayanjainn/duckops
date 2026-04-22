@@ -93,7 +93,7 @@ export function LiveBuildCard({ projectId, projectName, jobName, jobUrl }: LiveB
       <Card className="opacity-60">
         <CardContent className="p-4 flex items-center gap-3 text-xs text-muted">
           <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
-          Connecting to Jenkins for <span className="font-mono text-white ml-1">{projectName}</span>…
+          Connecting to Jenkins for <span className="font-mono text-foreground ml-1">{projectName}</span>…
         </CardContent>
       </Card>
     );
@@ -164,7 +164,7 @@ export function LiveBuildCard({ projectId, projectName, jobName, jobUrl }: LiveB
           <div className="pt-1">
             <button
               onClick={() => setShowConsole((v) => !v)}
-              className="flex items-center gap-1.5 text-xs text-muted hover:text-white transition-colors"
+              className="flex items-center gap-1.5 text-xs text-muted hover:text-foreground transition-colors"
             >
               <Terminal className="h-3 w-3" />
               Console output
@@ -175,7 +175,7 @@ export function LiveBuildCard({ projectId, projectName, jobName, jobUrl }: LiveB
             {showConsole && (
               <div
                 ref={consoleRef}
-                className="mt-2 bg-black border border-border rounded-lg p-3 max-h-48 overflow-y-auto"
+                className="mt-2 bg-surface border border-border rounded-lg p-3 max-h-48 overflow-y-auto"
               >
                 <pre className="text-[10px] leading-relaxed text-emerald-400 font-mono whitespace-pre-wrap break-all">
                   {data.consoleLines.join("\n")}

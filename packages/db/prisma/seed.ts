@@ -1,4 +1,4 @@
-import { PrismaClient, Layer } from "@prisma/client";
+import { PrismaClient, Layer } from "./../src/generated/client";
 
 const prisma = new PrismaClient();
 
