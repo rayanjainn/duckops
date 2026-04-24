@@ -20,7 +20,7 @@ RUN cd packages/db && pnpm prisma generate
 RUN pnpm turbo build --filter=ai-service
 
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm deploy --filter=ai-service --prod /deploy && \
+    pnpm deploy --legacy --filter=ai-service --prod /deploy && \
     mkdir -p /deploy/node_modules/.prisma && \
     cp -r packages/db/src/generated/client /deploy/node_modules/.prisma/client
 

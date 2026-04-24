@@ -22,7 +22,7 @@ RUN pnpm turbo build --filter=catalog-service
 # pnpm deploy: flat prod-only node_modules, no .pnpm store, no workspace files.
 # Cuts runtime image by ~50% vs copying the full workspace node_modules.
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm deploy --filter=catalog-service --prod /deploy && \
+    pnpm deploy --legacy --filter=catalog-service --prod /deploy && \
     mkdir -p /deploy/node_modules/.prisma && \
     cp -r packages/db/src/generated/client /deploy/node_modules/.prisma/client
 

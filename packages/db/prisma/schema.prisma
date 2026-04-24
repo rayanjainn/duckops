@@ -9,17 +9,24 @@ datasource db {
 }
 
 model User {
-  id                String    @id @default(cuid())
-  email             String    @unique
-  name              String
-  role              Role      @default(DEVELOPER)
-  githubId          String    @unique
-  githubUsername    String
-  githubAccessToken String
-  avatarUrl         String?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  projects          Project[]
+  id                    String    @id @default(cuid())
+  email                 String    @unique
+  name                  String
+  role                  Role      @default(DEVELOPER)
+  plan                  Plan      @default(FREE)
+  githubId              String    @unique
+  githubUsername        String
+  githubAccessToken     String
+  avatarUrl             String?
+  aiPromptsRemaining    Int       @default(3)
+  aiPromptsResetAt      DateTime  @default(now())
+  devMode               Boolean   @default(false)
+  stripeCustomerId      String?   @unique
+  stripeSubscriptionId  String?
+  stripeSubStatus       String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  projects              Project[]
 }
 
 model TemplateOption {
@@ -181,4 +188,9 @@ model AiMessage {
   content   String    @db.Text
   createdAt DateTime  @default(now())
   session   AiSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+enum Plan {
+  FREE
+  PRO
 }

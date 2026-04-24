@@ -7,10 +7,11 @@ import type {
 } from "@duckops/shared-types";
 import { getToken, clearSession } from "@/lib/auth";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4002";
+const API_BASE      = process.env.NEXT_PUBLIC_API_URL      || "http://localhost:4002";
 const PIPELINE_BASE = process.env.NEXT_PUBLIC_PIPELINE_URL || "http://localhost:4003";
-const CATALOG_BASE = process.env.NEXT_PUBLIC_CATALOG_URL || "http://localhost:4001";
-export const AI_BASE = process.env.NEXT_PUBLIC_AI_URL || "http://localhost:4005";
+const CATALOG_BASE  = process.env.NEXT_PUBLIC_CATALOG_URL  || "http://localhost:4001";
+const HEALTH_BASE   = process.env.NEXT_PUBLIC_HEALTH_URL   || "http://localhost:4004";
+export const AI_BASE = process.env.NEXT_PUBLIC_AI_URL      || "http://localhost:4005";
 
 export const api = axios.create({
   baseURL: API_BASE,
@@ -67,33 +68,62 @@ export const projectApi = {
     api.post(`/api/projects/${id}/retry`).then((r) => r.data),
 };
 
+const healthAxios = axios.create({ baseURL: HEALTH_BASE });
+healthAxios.interceptors.request.use((config) => {
+  const token = getToken();
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
 export const healthApi = {
   getHealth: (projectId: string) =>
-    api.get(`/api/health/${projectId}`).then((r) => r.data),
+    healthAxios.get(`/api/health/${projectId}`).then((r) => r.data),
 
   getLogs: (projectId: string, lines?: number) =>
-    api
+    healthAxios
       .get(`/api/logs/${projectId}`, { params: { lines } })
       .then((r) => r.data),
 };
+
+const pipelineAxios = axios.create({ baseURL: PIPELINE_BASE });
+pipelineAxios.interceptors.request.use((config) => {
+  const token = getToken();
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
 
 export const pipelineApi = {
   create: (data: { projectId: string; gitRepoUrl: string; branch?: string }): Promise<Pipeline> =>
     api.post("/api/pipelines", data).then((r) => r.data),
 
   getByProject: (projectId: string): Promise<Pipeline | null> =>
-    api.get(`/api/pipelines/project/${projectId}`).then((r) => r.data),
+    pipelineAxios.get(`/api/pipelines/project/${projectId}`).then((r) => r.data),
 
   triggerBuild: (pipelineId: string) =>
-    api.post(`/api/pipelines/${pipelineId}/build`).then((r) => r.data),
+    pipelineAxios.post(`/api/pipelines/${pipelineId}/build`).then((r) => r.data),
+
+  syncDeployments: (projectId: string) =>
+    pipelineAxios.post(`/api/pipelines/project/${projectId}/sync-deployments`).then((r) => r.data),
 
   snapshot: (projectId: string): Promise<LiveBuildInfo | null> =>
-    axios.get(`${PIPELINE_BASE}/api/pipelines/project/${projectId}/snapshot`, {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    }).then((r) => r.data),
+    pipelineAxios.get(`/api/pipelines/project/${projectId}/snapshot`).then((r) => r.data).catch(() => null),
 
   liveUrl: (projectId: string): string =>
-    `${PIPELINE_BASE}/api/pipelines/project/${projectId}/live`,
+    `${PIPELINE_BASE}/api/pipelines/project/${projectId}/live?token=${getToken()}`,
+};
+
+export const billingApi = {
+  createCheckout: (): Promise<{ url: string }> =>
+    api.post("/api/billing/checkout").then((r) => r.data),
+
+  getPortal: (): Promise<{ url: string }> =>
+    api.post("/api/billing/portal").then((r) => r.data),
+
+  getStatus: (): Promise<{ plan: string; devMode: boolean; aiPromptsRemaining: number; projectCount: number }> =>
+    api.get("/api/billing/status").then((r) => r.data),
+
+  toggleDevMode: (): Promise<{ devMode: boolean }> =>
+    api.post("/api/billing/dev-mode").then((r) => r.data),
 };
 
 export interface StackRecommendation {

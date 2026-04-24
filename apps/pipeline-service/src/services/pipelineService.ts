@@ -1,9 +1,10 @@
-import { prisma, PipelineStatus } from "@duckops/db";
+import { prisma, PipelineStatus, DeploymentStatus } from "@duckops/db";
 import { createLogger, NotFoundError } from "@duckops/shared-utils";
 import {
   createJenkinsPipeline,
   triggerBuild,
   getLastBuildInfo,
+  getAllBuilds,
   deleteJenkinsPipeline,
 } from "./jenkinsService";
 
@@ -93,6 +94,57 @@ export async function getPipeline(pipelineId: string) {
 export async function getPipelineByProject(projectId: string) {
   return prisma.pipeline.findUnique({
     where: { projectId },
+  });
+}
+
+export async function syncDeployments(projectId: string) {
+  const pipeline = await prisma.pipeline.findUnique({ where: { projectId } });
+  if (!pipeline) return [];
+
+  const builds = await getAllBuilds(pipeline.jenkinsJobName);
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { name: true } });
+  if (!project) return [];
+
+  const registry = process.env.HOST_REGISTRY_URL || "localhost:5111";
+
+  for (const build of builds) {
+    if (!build.result) continue; // still running
+
+    const version = `build-${build.number}`;
+    const existing = await prisma.deployment.findFirst({ where: { projectId, version } });
+    if (existing) continue;
+
+    const status = build.result === "SUCCESS" ? DeploymentStatus.SUCCESS : DeploymentStatus.FAILED;
+    await prisma.deployment.create({
+      data: {
+        projectId,
+        version,
+        imageTag: `${registry}/${project.name}:${build.number}`,
+        status,
+        triggeredBy: "jenkins",
+        completedAt: build.timestamp ? new Date(build.timestamp + build.duration) : new Date(),
+      },
+    });
+    logger.info(`Backfilled deployment record: ${version} (${status})`);
+  }
+
+  // Also update pipeline last build info
+  if (builds.length > 0) {
+    const latest = builds[0];
+    await prisma.pipeline.update({
+      where: { id: pipeline.id },
+      data: {
+        lastBuildNumber: latest.number,
+        lastBuildStatus: latest.result ?? undefined,
+        lastBuildAt: latest.timestamp ? new Date(latest.timestamp) : undefined,
+      },
+    });
+  }
+
+  return prisma.deployment.findMany({
+    where: { projectId },
+    orderBy: { startedAt: "desc" },
+    take: 20,
   });
 }
 

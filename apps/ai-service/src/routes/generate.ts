@@ -65,6 +65,34 @@ generateRouter.post("/stream", async (req, res, next) => {
     if (!project) return res.status(404).json({ error: "Project not found" });
     if (!project.githubRepoUrl) return res.status(400).json({ error: "No GitHub repo attached to project" });
 
+    // --- Billing / AI Prompt Limits Enforcement ---
+    const user = project.user as any;
+    if (user.plan === "FREE" && !user.devMode) {
+      const now = new Date();
+      let remaining = user.aiPromptsRemaining;
+      let resetAt = new Date(user.aiPromptsResetAt);
+
+      if (now >= resetAt) {
+        // Reset period has passed, give 3 new prompts for the next 6 hours
+        remaining = 3;
+        resetAt = new Date(now.getTime() + 6 * 60 * 60 * 1000); // +6 hours
+      }
+
+      if (remaining <= 0) {
+        return res.status(403).json({ error: "Free tier limit reached. You get 3 AI prompts every 6 hours." });
+      }
+
+      // Decrement usage
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          aiPromptsRemaining: remaining - 1,
+          aiPromptsResetAt: resetAt,
+        },
+      });
+    }
+    // ----------------------------------------------
+
     // SSE headers
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");

@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { pipelineApi, type LiveBuildInfo } from "@/lib/api";
-import { getToken } from "@/lib/auth";
 
 export function useLiveBuild(projectId: string | null) {
   const [data, setData] = useState<LiveBuildInfo | null>(null);
@@ -14,8 +13,8 @@ export function useLiveBuild(projectId: string | null) {
   useEffect(() => {
     if (!projectId) return;
 
-    const token = getToken();
-    const url = `${pipelineApi.liveUrl(projectId)}${token ? `?token=${token}` : ""}`;
+    // liveUrl() already appends ?token=... — don't add it again
+    const url = pipelineApi.liveUrl(projectId);
     const es = new EventSource(url);
     esRef.current = es;
 

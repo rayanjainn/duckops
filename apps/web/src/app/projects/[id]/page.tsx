@@ -41,7 +41,7 @@ import { StatusBadge } from "@/components/projects/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, getStatusLabel } from "@/lib/utils";
-import { AI_BASE, healthApi } from "@/lib/api";
+import { AI_BASE, healthApi, pipelineApi } from "@/lib/api";
 import type { ProjectStatus } from "@duckops/shared-types";
 import {
   AreaChart,
@@ -302,6 +302,11 @@ function LogConsole({
   onRefresh?: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    }
+  }, [lines]);
 
   return (
     <div className="terminal-window flex flex-col min-h-[260px] max-h-[460px]">
@@ -375,23 +380,32 @@ function LogsTab({
   const [activeLog, setActiveLog] = useState<"jenkins" | "pod">("jenkins");
   const [podLines, setPodLines] = useState<string[]>([]);
   const [podLoading, setPodLoading] = useState(false);
+  const [podLineCount, setPodLineCount] = useState(500);
 
-  const fetchPodLogs = async () => {
+  const fetchPodLogs = async (lines = podLineCount) => {
     setPodLoading(true);
     try {
-      const data = await healthApi.getLogs(project.id, 200);
-      const lines: string[] =
-        typeof data.logs === "string"
-          ? data.logs.split("\n").filter(Boolean)
-          : [];
-      setPodLines(lines);
-    } catch {
+      const data = await healthApi.getLogs(project.id, lines);
+      const raw = typeof data.logs === "string" ? data.logs : "";
+      const parsed = raw.split("\n").filter(Boolean);
+      setPodLines(parsed.length > 0 ? parsed : ["(no output — pod may not have logged anything yet)"]);
+    } catch (err: any) {
+      const msg = err?.message || "";
       setPodLines([
-        "No pod logs available — pod may still be starting or not yet scheduled.",
+        msg.includes("403") || msg.includes("Forbidden")
+          ? "Access denied — you don't own this project."
+          : msg.includes("404") || msg.includes("Not Found")
+            ? "Project not found in health service."
+            : `Error fetching pod logs: ${msg || "unknown error"}`,
       ]);
     } finally {
       setPodLoading(false);
     }
+  };
+
+  const loadAll = () => {
+    setPodLineCount(500);
+    fetchPodLogs(500);
   };
 
   useEffect(() => {
@@ -421,6 +435,15 @@ function LogsTab({
           <span className="text-[10px] text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded-md ml-1">
             Building #{liveBuild.number}
           </span>
+        )}
+        {activeLog === "pod" && (
+          <button
+            onClick={loadAll}
+            disabled={podLoading}
+            className="ml-1 px-3 py-1.5 rounded-md text-xs font-medium text-muted hover:text-foreground hover:bg-surface-3 transition-all"
+          >
+            show all
+          </button>
         )}
       </div>
 
@@ -481,21 +504,17 @@ function LogsTab({
       {/* Pod logs */}
       {activeLog === "pod" && (
         <div className="space-y-3">
-          {project.status !== "RUNNING" && project.status !== "DEGRADED" ? (
-            <div className="p-4 rounded-xl border border-border bg-surface-2 text-sm text-muted">
-              Pod logs are available once the project is running. Current
-              status:{" "}
-              <span className="font-mono text-foreground">
-                {project.status}
-              </span>
-            </div>
-          ) : (
-            <LogConsole
-              lines={podLines}
-              title={`kubectl logs — pod`}
-              loading={podLoading}
-              onRefresh={fetchPodLogs}
-            />
+          <LogConsole
+            lines={podLines}
+            title={`kubectl logs — ${project.id.slice(0, 8)} (last ${podLineCount} lines)`}
+            loading={podLoading}
+            onRefresh={() => fetchPodLogs()}
+          />
+          {podLines.length > 0 && !podLoading && (
+            <p className="text-[11px] text-muted px-1">
+              {podLines.length} line{podLines.length !== 1 ? "s" : ""} · logs include timestamps ·{" "}
+              <button onClick={loadAll} className="text-amber-500 hover:underline">fetch 500 lines</button>
+            </p>
           )}
         </div>
       )}
@@ -667,7 +686,17 @@ function AiBuilderTab({ project, liveBuild }: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectId: project.id, prompt: userMsg, sessionId }),
       });
-      if (!res.ok || !res.body) throw new Error("Stream failed");
+      if (!res.ok || !res.body) {
+        let errMsg = "Could not reach AI service. Check that the service is running.";
+        if (res.status === 403) {
+          let body: any = {};
+          try { body = await res.json(); } catch {}
+          errMsg = body.error || "Free tier limit reached.";
+        } else if (res.status === 429) {
+          errMsg = "Too many requests. Please wait a moment and try again.";
+        }
+        throw Object.assign(new Error(errMsg), { status: res.status });
+      }
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -721,10 +750,14 @@ function AiBuilderTab({ project, liveBuild }: {
                 });
               }
             } else if (evtType === "error") {
+              const isRateLimit = /limit reached|3 AI prompts/i.test(data.message || "");
+              const errorText = isRateLimit
+                ? `**AI limit reached.** You've used all your free AI prompts for this window.\n\nFree plan: **3 prompts every 6 hours**. Upgrade to Pro for unlimited access.\n\n[Upgrade to Pro →](/billing)`
+                : `**Error:** ${data.message}`;
               setAiMessages(project.id, (m) => {
                 const c = [...m];
                 const last = c[c.length - 1];
-                c[c.length - 1] = { ...last, content: (last.content || "") + `\n\n**Error:** ${data.message}`, streaming: false };
+                c[c.length - 1] = { ...last, content: (last.content || "") + `\n\n${errorText}`, streaming: false };
                 return c;
               });
             }
@@ -733,8 +766,12 @@ function AiBuilderTab({ project, liveBuild }: {
       }
       parser.finalize();
       setAiMessages(project.id, (m) => { const c = [...m]; c[c.length - 1] = { ...c[c.length - 1], streaming: false }; return c; });
-    } catch {
-      setAiMessages(project.id, (m) => { const c = [...m]; c[c.length - 1] = { ...c[c.length - 1], content: "Could not reach AI service.", streaming: false }; return c; });
+    } catch (err: any) {
+      const isRateLimit = err?.status === 403 || /limit reached|3 AI prompts/i.test(err?.message || "");
+      const errContent = isRateLimit
+        ? `**AI limit reached.** You've used all your free AI prompts for this window.\n\nFree plan: **3 prompts every 6 hours**. Upgrade to Pro for unlimited access.\n\n[Upgrade to Pro →](/billing)`
+        : `**Could not reach AI service.** ${err?.message || "An unexpected error occurred. Please try again."}`;
+      setAiMessages(project.id, (m) => { const c = [...m]; c[c.length - 1] = { ...c[c.length - 1], content: errContent, streaming: false }; return c; });
     } finally {
       setAiLoading(project.id, false);
     }
@@ -2028,7 +2065,33 @@ export default function ProjectDetailPage({
 
         {/* ── Deployments ── */}
         {activeTab === "deployments" && (
-          <div className="space-y-4">
+          <DeploymentsTab project={project} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DeploymentsTab({ project }: { project: any }) {
+  const [syncing, setSyncing] = useState(false);
+
+  useEffect(() => {
+    if (project.id) {
+      setSyncing(true);
+      pipelineApi.syncDeployments(project.id)
+        .catch(() => {})
+        .finally(() => setSyncing(false));
+    }
+  }, [project.id]);
+
+  return (
+    <div className="space-y-4">
+      {syncing && (
+        <div className="flex items-center gap-2 text-xs text-muted">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Syncing deployment history from Jenkins...
+        </div>
+      )}
             {/* Pipeline summary card */}
             {project.pipeline && (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -2110,7 +2173,7 @@ export default function ProjectDetailPage({
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
-                    {project.deployments.map((dep, i) => (
+                    {project.deployments.map((dep: any, i: number) => (
                       <div
                         key={dep.id}
                         className="flex items-center justify-between p-3 rounded-lg bg-surface-3 border border-border"
@@ -2188,9 +2251,6 @@ export default function ProjectDetailPage({
                 </CardContent>
               </Card>
             )}
-          </div>
-        )}
-      </div>
     </div>
   );
 }

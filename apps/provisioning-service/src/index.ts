@@ -5,14 +5,14 @@ config({ path: resolve(__dirname, "../../../.env") });
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import morgan from "morgan";
 import { createServer } from "http";
 import { Server as SocketServer } from "socket.io";
 
 import { projectRouter } from "./routes/projects";
 import { authRouter } from "./routes/auth";
+import { billingRouter } from "./routes/billing";
 import { errorHandler } from "./middleware/errorHandler";
-import { createLogger } from "@duckops/shared-utils";
+import { createLogger, httpLogger } from "@duckops/shared-utils";
 
 const logger = createLogger("provisioning-service");
 const app = express();
@@ -24,7 +24,10 @@ export const io = new SocketServer(httpServer, {
 
 app.use(cors());
 app.use(helmet());
-app.use(morgan("combined"));
+app.use(httpLogger("provisioning-service"));
+
+// Stripe webhook needs raw body — mount BEFORE express.json()
+app.use("/api/billing/webhook", express.raw({ type: "application/json" }));
 app.use(express.json());
 
 app.get("/health", (_req, res) => {
@@ -33,6 +36,7 @@ app.get("/health", (_req, res) => {
 
 app.use("/api/auth", authRouter);
 app.use("/api/projects", projectRouter);
+app.use("/api/billing", billingRouter);
 
 app.use(errorHandler);
 
@@ -43,8 +47,8 @@ httpServer.listen(PORT, () => {
 });
 
 io.on("connection", (socket) => {
-  logger.info(`Client connected: ${socket.id}`);
+  logger.debug(`Socket connected: ${socket.id}`);
   socket.on("disconnect", () => {
-    logger.info(`Client disconnected: ${socket.id}`);
+    logger.debug(`Socket disconnected: ${socket.id}`);
   });
 });

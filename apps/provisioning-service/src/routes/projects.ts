@@ -10,6 +10,7 @@ import {
   retryProject,
 } from "../services/projectService";
 import { NotFoundError, slugify } from "@duckops/shared-utils";
+import { prisma } from "@duckops/db";
 
 export const projectRouter = Router();
 
@@ -32,6 +33,13 @@ projectRouter.post(
   validate(createProjectSchema),
   async (req, res, next) => {
     try {
+      if (req.user!.plan === "FREE" && !req.user!.devMode) {
+        const count = await prisma.project.count({ where: { userId: req.user!.id } });
+        if (count >= 2) {
+          return res.status(403).json({ error: "Free tier limit reached. You can only have 2 active projects. Upgrade to Pro for unlimited projects." });
+        }
+      }
+
       const { displayName, ...rest } = req.body;
       const name = slugify(displayName);
 

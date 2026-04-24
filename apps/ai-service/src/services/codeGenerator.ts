@@ -38,6 +38,21 @@ export function parseArtifact(raw: string): FileAction[] {
       actions.push({ type: "shell", content });
     }
   }
+
+  // Fallback: if model ignored the XML format and used markdown code blocks,
+  // try to extract files from annotated fences like: ```tsx src/app/page.tsx
+  if (actions.length === 0) {
+    const fenceRegex = /```(?:\w+)?\s+([\w/.@-]+\.\w+)\n([\s\S]*?)```/g;
+    while ((match = fenceRegex.exec(raw)) !== null) {
+      const filePath = match[1].trim();
+      const content = match[2].trim();
+      if (filePath && content) {
+        actions.push({ type: "file", filePath, content });
+        logger.info(`Fallback markdown parser extracted: ${filePath}`);
+      }
+    }
+  }
+
   return actions;
 }
 

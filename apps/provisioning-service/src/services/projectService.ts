@@ -213,6 +213,21 @@ async function provisionProject(
       throw new Error(`Pipeline service error ${pipelineRes.status}: ${errText}`);
     }
     emitStatus(projectId, ProjectStatus.DEPLOYING, "Jenkins job created", "Create Jenkins job & configure SCM polling");
+
+    // Trigger the first build immediately after pipeline creation
+    try {
+      const triggerRes = await fetch(`${PIPELINE_SERVICE}/api/pipelines/project/${projectId}/trigger`, {
+        method: "POST",
+      });
+      if (triggerRes.ok) {
+        logger.info(`Initial Jenkins build triggered for project ${projectId}`);
+        emitStatus(projectId, ProjectStatus.DEPLOYING, "Initial build triggered", "Trigger initial build");
+      } else {
+        logger.warn(`Failed to trigger initial build: HTTP ${triggerRes.status}`);
+      }
+    } catch (triggerErr: any) {
+      logger.warn(`Could not trigger initial build (non-fatal): ${triggerErr.message}`);
+    }
   } catch (err: any) {
     logger.warn(`Pipeline creation failed (non-fatal): ${err.message}`);
   }

@@ -17,6 +17,15 @@
 
 ---
 
+## ✨ Recent Updates
+
+- **Premium UX & Design**: Upgraded the entire dashboard to a beautiful Dark Theme aesthetic featuring glassmorphism, animated transitions, and a secure `DeleteProjectDialog` replacing standard browser alerts.
+- **Billing & Tiers Built-in**: We've added a Free & Pro tier system. Free users get up to **2 active projects** and **3 AI code generation prompts every 6 hours**. Pro users unlock unlimited usage!
+- **Instant CI/CD Triggers**: Eliminated Jenkins 1-minute SCM polling. The AI-service now directly triggers pipelines via internal API for instant deployments.
+- **Resilient Setup Scripts**: `setup-local.sh` is now completely lockfile-agnostic for smoother first-time local builds across different Node/pnpm versions.
+
+---
+
 ## What is DuckOps?
 
 DuckOps is a self-hosted **Internal Developer Platform (IDP)** built as a TypeScript monorepo. Choose a language, framework, database, and ORM through a wizard UI — DuckOps does everything else:

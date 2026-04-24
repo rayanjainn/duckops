@@ -12,16 +12,20 @@ import {
   ChevronRight,
   GitBranch,
   GraduationCap,
+  CreditCard,
+  Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { resetAndRunTour } from "@/components/tutorial/OnboardingTour";
+import { billingApi } from "@/lib/api";
 
 const navItems = [
   { href: "/projects", label: "Projects", icon: Folder, exact: true },
   { href: "/projects/new", label: "New Project", icon: Plus, exact: true },
   { href: "/templates", label: "Templates", icon: BookOpen, exact: true },
+  { href: "/billing", label: "Billing", icon: CreditCard, exact: true },
 ];
 
 function isActive(pathname: string, href: string, exact: boolean): boolean {
@@ -33,6 +37,22 @@ export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
+  const [devMode, setDevMode] = useState(false);
+  const [devModeLoading, setDevModeLoading] = useState(false);
+
+  useEffect(() => {
+    billingApi.getStatus().then((s) => setDevMode(s.devMode)).catch(() => {});
+  }, []);
+
+  const toggleDevMode = async () => {
+    setDevModeLoading(true);
+    try {
+      const { devMode: next } = await billingApi.toggleDevMode();
+      setDevMode(next);
+    } finally {
+      setDevModeLoading(false);
+    }
+  };
 
   return (
     <aside
@@ -87,6 +107,33 @@ export function Sidebar() {
       >
         {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
       </button>
+
+      {/* Dev mode toggle */}
+      <div className={cn("px-3 pb-1", collapsed && "px-2")}>
+        <button
+          onClick={toggleDevMode}
+          disabled={devModeLoading}
+          title={collapsed ? `Dev mode ${devMode ? "on" : "off"}` : undefined}
+          className={cn(
+            "flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm transition-all",
+            devMode
+              ? "bg-amber-500/10 border border-amber-500/20 text-amber-500 hover:bg-amber-500/15"
+              : "text-muted-2 hover:bg-surface-3 hover:text-foreground",
+            collapsed && "justify-center px-0",
+            devModeLoading && "opacity-50",
+          )}
+        >
+          <Zap className="h-4 w-4 shrink-0" />
+          {!collapsed && (
+            <span className="flex-1 text-left">Dev Mode</span>
+          )}
+          {!collapsed && (
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${devMode ? "bg-amber-500/20 text-amber-500" : "bg-surface-3 text-muted border border-border"}`}>
+              {devMode ? "ON" : "OFF"}
+            </span>
+          )}
+        </button>
+      </div>
 
       {/* Tutorial button */}
       <div className={cn("px-3 pb-2", collapsed && "px-2")}>

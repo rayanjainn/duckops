@@ -197,8 +197,24 @@ pipeline {
     }
 
     post {
-        success { echo 'Deployment successful!' }
-        failure { echo 'Deployment failed!' }
+        success {
+            sh """
+                curl -sf -X POST http://duckops-pipeline:4003/api/pipelines/deployments \\
+                  -H 'Content-Type: application/json' \\
+                  -d '{"projectName":"\${IMAGE_NAME}","buildNumber":"\${BUILD_NUMBER}","imageTag":"\${HOST_REGISTRY}/\${IMAGE_NAME}:\${BUILD_NUMBER}","status":"SUCCESS"}' \\
+                  || true
+            """
+            echo 'Deployment successful!'
+        }
+        failure {
+            sh """
+                curl -sf -X POST http://duckops-pipeline:4003/api/pipelines/deployments \\
+                  -H 'Content-Type: application/json' \\
+                  -d '{"projectName":"\${IMAGE_NAME}","buildNumber":"\${BUILD_NUMBER}","imageTag":"\${HOST_REGISTRY}/\${IMAGE_NAME}:\${BUILD_NUMBER}","status":"FAILED"}' \\
+                  || true
+            """
+            echo 'Deployment failed!'
+        }
     }
 }
     </script>
@@ -293,6 +309,23 @@ export async function getLastBuildInfo(
 
   if (!response.ok) return null;
   return response.json() as any;
+}
+
+export async function getAllBuilds(
+  jobName: string,
+): Promise<Array<{ number: number; result: string | null; url: string; duration: number; timestamp: number }>> {
+  const headers: Record<string, string> = {};
+  const auth = getAuthHeader();
+  if (auth) headers.Authorization = auth;
+
+  const response = await fetch(
+    `${JENKINS_URL}/job/${encodeURIComponent(jobName)}/api/json?tree=builds[number,result,url,duration,timestamp]`,
+    { headers },
+  );
+
+  if (!response.ok) return [];
+  const data = await response.json() as { builds?: Array<{ number: number; result: string | null; url: string; duration: number; timestamp: number }> };
+  return data.builds || [];
 }
 
 export interface BuildStage {

@@ -1,0 +1,7 @@
+-- CreateEnum
+CREATE TYPE "Plan" AS ENUM ('FREE', 'PRO');
+
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN     "aiPromptsRemaining" INTEGER NOT NULL DEFAULT 3,
+ADD COLUMN     "aiPromptsResetAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN     "plan" "Plan" NOT NULL DEFAULT 'FREE';

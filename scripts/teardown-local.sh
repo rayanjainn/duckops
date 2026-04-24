@@ -233,13 +233,13 @@ fi
 
 # ─── 12. Build artifacts (dist/, prisma generated) ───────────────────────────
 step "Build artifacts"
-# Remove compiled JS dist/ dirs from all apps and packages
+# Remove compiled JS dist/ and .next/ dirs from all apps and packages
 REMOVED=0
 while IFS= read -r d; do
   rm -rf "$d"
   REMOVED=$((REMOVED + 1))
-done < <(find "$ROOT/apps" "$ROOT/packages" -maxdepth 3 -type d -name "dist" 2>/dev/null || true)
-[ "$REMOVED" -gt 0 ] && ok "Removed $REMOVED dist/ directories" || skip "No dist/ directories found"
+done < <(find "$ROOT/apps" "$ROOT/packages" -maxdepth 3 -type d \( -name "dist" -o -name ".next" \) 2>/dev/null || true)
+[ "$REMOVED" -gt 0 ] && ok "Removed $REMOVED dist/ or .next/ directories" || skip "No dist/ or .next/ directories found"
 
 # Remove Prisma generated client
 if [ -d "$ROOT/packages/db/node_modules/.prisma" ]; then

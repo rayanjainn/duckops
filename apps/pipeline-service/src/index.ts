@@ -5,13 +5,12 @@ config({ path: resolve(__dirname, "../../../.env") });
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-import morgan from "morgan";
 import { createServer } from "http";
 import { Server as SocketServer } from "socket.io";
 
 import { pipelineRouter } from "./routes/pipelines";
 import { errorHandler } from "./middleware/errorHandler";
-import { createLogger } from "@duckops/shared-utils";
+import { createLogger, httpLogger } from "@duckops/shared-utils";
 
 const logger = createLogger("pipeline-service");
 const app = express();
@@ -21,7 +20,7 @@ export const io = new SocketServer(httpServer, { cors: { origin: "*" } });
 
 app.use(cors());
 app.use(helmet());
-app.use(morgan("combined"));
+app.use(httpLogger("pipeline-service"));
 app.use(express.json());
 
 app.get("/health", (_req, res) => {

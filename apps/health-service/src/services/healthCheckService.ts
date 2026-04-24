@@ -156,13 +156,21 @@ export async function getProjectLogs(
   projectName: string,
   lines = 100,
 ): Promise<string> {
+  // Sanitize: only allow lowercase alphanumeric and hyphens (matches k8s naming rules)
+  const safeName = projectName.replace(/[^a-z0-9-]/g, "");
+  const safeLines = Math.min(Math.max(1, Math.floor(lines)), 500);
+  if (!safeName) return "Invalid project name";
+
   try {
-    const { stdout } = await execAsync(
-      `kubectl logs -l app=${projectName} -n project-${projectName} --tail=${lines}`,
+    const { stdout, stderr } = await execAsync(
+      `kubectl logs -l app=${safeName} -n project-${safeName} --tail=${safeLines} --timestamps=true 2>&1`,
+      { timeout: 10000 },
     );
-    return stdout;
+    const out = stdout || stderr || "";
+    if (!out.trim()) return "(no output — pod may not have logged anything yet)";
+    return out;
   } catch (err: any) {
-    logger.error(`Failed to get logs for ${projectName}: ${err.message}`);
-    return `Error fetching logs: ${err.message}`;
+    logger.error(`Failed to get logs for ${safeName}: ${err.message}`);
+    return err.stderr || err.message || "Error fetching logs";
   }
 }

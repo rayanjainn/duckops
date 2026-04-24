@@ -12,6 +12,8 @@ declare global {
         name: string;
         email: string;
         avatarUrl: string | null;
+        plan: string;
+        devMode: boolean;
       };
     }
   }
@@ -45,6 +47,8 @@ export async function requireAuth(
       name: user.name,
       email: user.email,
       avatarUrl: user.avatarUrl,
+      plan: (user as any).plan || "FREE",
+      devMode: (user as any).devMode || false,
     };
 
     next();
