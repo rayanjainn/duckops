@@ -8,7 +8,7 @@ Complete step-by-step guide. Do these phases in order. Each section states when 
 
 - AWS account — IAM user `duckops-admin` with EC2FullAccess + ECRFullAccess + VPCFullAccess
 - AWS Access Key ID + Secret Access Key for that user
-- A domain you own (examples use `yourdomain.tech`)
+- A domain you own (examples use `raycode.tech`)
 - A Neon.tech account (free) — for serverless Postgres
 - A GitHub account with this repo pushed to it
 - A Stripe account with a product + price created (free + pro tiers)
@@ -89,7 +89,7 @@ done
    - **Name:** `duckops-prod`
    - **AMI:** Ubuntu Server 24.04 LTS (64-bit x86)
    - **Instance type:** `t3.large` (2 vCPU, 8 GB RAM)
-   - **Key pair:** Create new → name `duckops-ec2` → download `.pem` → save to `~/.ssh/duckops-ec2.pem`
+   - **Key pair:** Create new → name `duckops-ec2` → download `.pem` → save to `~/duckops-ec2.pem`
    - **Storage:** 50 GB gp3
    - **Security group inbound rules:**
      | Port | Protocol | Source | Purpose |
@@ -104,25 +104,25 @@ done
 
 1. EC2 → Elastic IPs → Allocate Elastic IP
 2. Associate it with `duckops-prod`
-3. Note the IP — used everywhere as `EC2_IP`
+3. Note the IP — used everywhere as `13.204.92.146`
 
 ### 3.3 Fix SSH key permissions
 
 ```bash
-chmod 400 ~/.ssh/duckops-ec2.pem
+chmod 400 ~/duckops-ec2.pem
 
 # Test SSH works
-ssh -i ~/.ssh/duckops-ec2.pem ubuntu@EC2_IP "echo connected"
+ssh -i ~/duckops-ec2.pem ubuntu@13.204.92.146 "echo connected"
 ```
 
 ### 3.4 Run the setup script on EC2
 
 ```bash
 # Copy the setup script to EC2
-scp -i ~/.ssh/duckops-ec2.pem scripts/ec2-setup.sh ubuntu@EC2_IP:~/
+scp -i ~/duckops-ec2.pem scripts/ec2-setup.sh ubuntu@13.204.92.146:~/
 
 # SSH in and run it (takes ~10-15 min)
-ssh -i ~/.ssh/duckops-ec2.pem ubuntu@EC2_IP
+ssh -i ~/duckops-ec2.pem ubuntu@13.204.92.146
 sudo bash ~/ec2-setup.sh
 ```
 
@@ -136,19 +136,19 @@ At your domain registrar (Namecheap, Cloudflare, GoDaddy):
 
 | Type | Name | Value | TTL |
 |------|------|-------|-----|
-| A | `@` | `EC2_IP` | 300 |
-| A | `api` | `EC2_IP` | 300 |
+| A | `@` | `13.204.92.146` | 300 |
+| A | `api` | `13.204.92.146` | 300 |
 | CNAME | `app` | `cname.vercel-dns.com` | 300 |
-| A | `*` | `EC2_IP` | 300 |
+| A | `*` | `13.204.92.146` | 300 |
 
-- `app.yourdomain.tech` → Vercel (Next.js frontend)
-- `api.yourdomain.tech` → EC2 nginx → PM2 backend services
-- `*.yourdomain.tech` → EC2 nginx → K3s Traefik → deployed user projects
+- `app.raycode.tech` → Vercel (Next.js frontend)
+- `api.raycode.tech` → EC2 nginx → PM2 backend services
+- `*.raycode.tech` → EC2 nginx → K3s Traefik → deployed user projects
 
 Wait 5-10 min for propagation, then verify:
 ```bash
-dig api.yourdomain.tech +short   # should return EC2_IP
-dig app.yourdomain.tech +short   # should return Vercel's IP
+dig api.raycode.tech +short   # should return 13.204.92.146
+dig app.raycode.tech +short   # should return Vercel's IP
 ```
 
 ---
@@ -156,19 +156,19 @@ dig app.yourdomain.tech +short   # should return Vercel's IP
 ## Phase 5 — nginx + SSL on EC2 (one-time)
 
 ```bash
-ssh -i ~/.ssh/duckops-ec2.pem ubuntu@EC2_IP
+ssh -i ~/duckops-ec2.pem ubuntu@13.204.92.146
 
 # Configure nginx for your domain
-sudo bash /opt/duckops/scripts/nginx-setup.sh yourdomain.tech
+sudo bash /opt/duckops/scripts/nginx-setup.sh raycode.tech
 
 # Issue wildcard SSL cert (wildcard requires DNS challenge — Certbot will prompt you)
 sudo certbot certonly \
   --manual \
   --preferred-challenges dns \
-  -d yourdomain.tech \
-  -d "*.yourdomain.tech" \
+  -d raycode.tech \
+  -d "*.raycode.tech" \
   --agree-tos \
-  -m your@email.com
+  -m rayansjain@gmail.com
 
 # Certbot prints a TXT record to add to your DNS — add it, wait 60s, then press Enter
 # After cert is issued:
@@ -184,11 +184,11 @@ sudo systemctl enable certbot.timer
 
 ```bash
 # Get the initial admin password
-ssh -i ~/.ssh/duckops-ec2.pem ubuntu@EC2_IP
+ssh -i ~/duckops-ec2.pem ubuntu@13.204.92.146
 sudo cat /var/lib/jenkins/secrets/initialAdminPassword
 ```
 
-1. Open `http://EC2_IP:8085` in browser
+1. Open `http://13.204.92.146:8085` in browser
 2. Enter the password → Install suggested plugins → Create admin user
 3. **User icon → Configure → API Token → Add new Token** → copy the token
 4. Keep it — you'll paste it into `.env` as `JENKINS_TOKEN`
@@ -199,8 +199,8 @@ sudo cat /var/lib/jenkins/secrets/initialAdminPassword
 
 1. [github.com/settings/developers](https://github.com/settings/developers) → **New OAuth App**
    - **Application name:** `DuckOps`
-   - **Homepage URL:** `https://app.yourdomain.tech`
-   - **Authorization callback URL:** `https://api.yourdomain.tech/api/auth/github/callback`
+   - **Homepage URL:** `https://app.raycode.tech`
+   - **Authorization callback URL:** `https://api.raycode.tech/api/auth/github/callback`
 2. Generate a client secret → save Client ID + Secret
 
 ---
@@ -208,7 +208,7 @@ sudo cat /var/lib/jenkins/secrets/initialAdminPassword
 ## Phase 8 — Stripe webhook (one-time)
 
 1. Stripe Dashboard → Developers → Webhooks → Add endpoint
-   - **URL:** `https://api.yourdomain.tech/api/billing/webhook`
+   - **URL:** `https://api.raycode.tech/api/billing/webhook`
    - **Events:** `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `checkout.session.completed`
 2. Copy the webhook signing secret
 
@@ -217,14 +217,14 @@ sudo cat /var/lib/jenkins/secrets/initialAdminPassword
 ## Phase 9 — Create production .env on EC2 (one-time, update on changes)
 
 ```bash
-ssh -i ~/.ssh/duckops-ec2.pem ubuntu@EC2_IP
+ssh -i ~/duckops-ec2.pem ubuntu@13.204.92.146
 nano /opt/duckops/.env
 ```
 
 ```env
 NODE_ENV=production
 DEPLOY_MODE=cloud
-DOMAIN=yourdomain.tech
+DOMAIN=raycode.tech
 
 # ── Database ──────────────────────────────────────────────────────────────────
 DATABASE_URL=postgresql://neondb_owner:PASS@ep-xxx.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
@@ -246,15 +246,15 @@ GITHUB_CLIENT_SECRET=YOUR_GITHUB_CLIENT_SECRET
 JWT_SECRET=YOUR_RANDOM_64_CHAR_HEX
 
 # ── URLs ──────────────────────────────────────────────────────────────────────
-APP_URL=https://app.yourdomain.tech
-FRONTEND_URL=https://app.yourdomain.tech
-API_URL=https://api.yourdomain.tech
-NEXT_PUBLIC_API_URL=https://api.yourdomain.tech
-NEXT_PUBLIC_PIPELINE_URL=https://api.yourdomain.tech
-NEXT_PUBLIC_CATALOG_URL=https://api.yourdomain.tech
-NEXT_PUBLIC_HEALTH_URL=https://api.yourdomain.tech
-NEXT_PUBLIC_SOCKET_URL=https://api.yourdomain.tech
-NEXT_PUBLIC_AI_URL=https://api.yourdomain.tech
+APP_URL=https://app.raycode.tech
+FRONTEND_URL=https://app.raycode.tech
+API_URL=https://api.raycode.tech
+NEXT_PUBLIC_API_URL=https://api.raycode.tech
+NEXT_PUBLIC_PIPELINE_URL=https://api.raycode.tech
+NEXT_PUBLIC_CATALOG_URL=https://api.raycode.tech
+NEXT_PUBLIC_HEALTH_URL=https://api.raycode.tech
+NEXT_PUBLIC_SOCKET_URL=https://api.raycode.tech
+NEXT_PUBLIC_AI_URL=https://api.raycode.tech
 PIPELINE_SERVICE_URL=http://localhost:4003
 AI_SERVICE_URL=http://localhost:4005
 
@@ -310,18 +310,24 @@ rsync -avz \
   --exclude node_modules \
   --exclude .git \
   --exclude dist \
-  -e "ssh -i ~/.ssh/duckops-ec2.pem" \
-  . ubuntu@EC2_IP:/opt/duckops/
+  --exclude .next \
+  --exclude .env \
+  --exclude "*.log" \
+  --exclude .turbo \
+  --exclude .claude \
+  --exclude .code-review-graph \
+  -e "ssh -i ~/duckops-ec2.pem" \
+  . ubuntu@13.204.92.146:/opt/duckops/
 
 # SSH in and build
-ssh -i ~/.ssh/duckops-ec2.pem ubuntu@EC2_IP
+ssh -i ~/duckops-ec2.pem ubuntu@13.204.92.146
 cd /opt/duckops
 
 # Load env vars
 set -a; source .env; set +a
 
-# Install + build
-pnpm install --frozen-lockfile
+# Install with devDependencies (needed for tsc and prisma CLI)
+pnpm install --frozen-lockfile --prod=false
 pnpm --filter @duckops/db exec prisma generate
 pnpm -r build
 
@@ -348,12 +354,19 @@ rsync -avz \
   --exclude node_modules \
   --exclude .git \
   --exclude dist \
-  -e "ssh -i ~/.ssh/duckops-ec2.pem" \
-  . ubuntu@EC2_IP:/opt/duckops/
+  --exclude .next \
+  --exclude .env \
+  --exclude "*.log" \
+  --exclude .turbo \
+  --exclude .claude \
+  --exclude .code-review-graph \
+  -e "ssh -i ~/duckops-ec2.pem" \
+  . ubuntu@13.204.92.146:/opt/duckops/
 
-ssh -i ~/.ssh/duckops-ec2.pem ubuntu@EC2_IP
+ssh -i ~/duckops-ec2.pem ubuntu@13.204.92.146
 cd /opt/duckops
-pnpm install --frozen-lockfile
+pnpm install --frozen-lockfile --prod=false
+pnpm --filter @duckops/db exec prisma generate
 pnpm -r build
 pm2 reload ecosystem.config.js --update-env
 ```
@@ -373,16 +386,16 @@ vercel
 Set environment variables at vercel.com → your project → Settings → Environment Variables:
 
 ```
-NEXT_PUBLIC_API_URL          = https://api.yourdomain.tech
-NEXT_PUBLIC_PIPELINE_URL     = https://api.yourdomain.tech
-NEXT_PUBLIC_CATALOG_URL      = https://api.yourdomain.tech
-NEXT_PUBLIC_HEALTH_URL       = https://api.yourdomain.tech
-NEXT_PUBLIC_SOCKET_URL       = https://api.yourdomain.tech
-NEXT_PUBLIC_AI_URL           = https://api.yourdomain.tech
+NEXT_PUBLIC_API_URL          = https://api.raycode.tech
+NEXT_PUBLIC_PIPELINE_URL     = https://api.raycode.tech
+NEXT_PUBLIC_CATALOG_URL      = https://api.raycode.tech
+NEXT_PUBLIC_HEALTH_URL       = https://api.raycode.tech
+NEXT_PUBLIC_SOCKET_URL       = https://api.raycode.tech
+NEXT_PUBLIC_AI_URL           = https://api.raycode.tech
 ```
 
 Add custom domain:
-1. Vercel project → Settings → Domains → Add `app.yourdomain.tech`
+1. Vercel project → Settings → Domains → Add `app.raycode.tech`
 2. Vercel gives you a CNAME to add (already done in Phase 4)
 3. Wait ~2 min for SSL to provision
 
@@ -406,7 +419,7 @@ Go to your GitHub repo → Settings → Secrets and variables → Actions → Ne
 | `AWS_SECRET_ACCESS_KEY` | Your AWS secret |
 | `AWS_REGION` | `ap-south-1` |
 | `EC2_HOST` | Your EC2 Elastic IP |
-| `EC2_SSH_KEY` | Full contents of `~/.ssh/duckops-ec2.pem` |
+| `EC2_SSH_KEY` | Full contents of `~/duckops-ec2.pem` |
 | `VERCEL_TOKEN` | From vercel.com → Settings → Tokens |
 | `VERCEL_ORG_ID` | From `vercel project ls` |
 | `VERCEL_PROJECT_ID` | From `vercel project ls` |
@@ -428,20 +441,20 @@ git add . && git commit -m "ci: test production pipeline" && git push origin mai
 ## Phase 13 — Verify everything works
 
 ```bash
-ssh -i ~/.ssh/duckops-ec2.pem ubuntu@EC2_IP
+ssh -i ~/duckops-ec2.pem ubuntu@13.204.92.146
 
 pm2 status                  # all 5 services: online
 redis-cli ping              # PONG
 kubectl get nodes           # 1 node Ready
 systemctl status jenkins    # active (running)
 systemctl status nginx      # active (running)
-curl -s https://api.yourdomain.tech/health | jq .
+curl -s https://api.raycode.tech/health | jq .
 # {"status":"ok","service":"provisioning-service"}
 ```
 
 From your browser:
-- `https://app.yourdomain.tech` → DuckOps login page
-- `https://api.yourdomain.tech/health` → JSON health response
+- `https://app.raycode.tech` → DuckOps login page
+- `https://api.raycode.tech/health` → JSON health response
 
 ---
 
@@ -449,7 +462,7 @@ From your browser:
 
 ### Check logs
 ```bash
-ssh -i ~/.ssh/duckops-ec2.pem ubuntu@EC2_IP
+ssh -i ~/duckops-ec2.pem ubuntu@13.204.92.146
 pm2 logs                                    # all services
 pm2 logs duckops-provisioning --lines 100   # one service
 pm2 logs duckops-ai --lines 50
@@ -470,7 +483,7 @@ DATABASE_URL="postgresql://..." \
 
 ### Check K3s / user projects
 ```bash
-ssh -i ~/.ssh/duckops-ec2.pem ubuntu@EC2_IP
+ssh -i ~/duckops-ec2.pem ubuntu@13.204.92.146
 kubectl get namespaces | grep -v kube    # shows {github}-{project} namespaces
 kubectl get pods -n {github}-{project}
 kubectl logs -n {github}-{project} deploy/{project} --tail=50
@@ -486,7 +499,7 @@ ls /home/ | grep u_
 
 ### Rollback a deploy
 ```bash
-ssh -i ~/.ssh/duckops-ec2.pem ubuntu@EC2_IP
+ssh -i ~/duckops-ec2.pem ubuntu@13.204.92.146
 cd /opt/duckops
 git log --oneline -10        # find the commit to roll back to
 git checkout <commit-hash>
@@ -502,7 +515,7 @@ pm2 reload ecosystem.config.js --update-env
 |---------|-----|
 | PM2 service errored | `pm2 logs duckops-<service> --lines 50` |
 | Jenkins unreachable | `systemctl status jenkins` → check port 8085 in security group |
-| OAuth callback fails | Verify GitHub OAuth app callback URL = `https://api.yourdomain.tech/api/auth/github/callback` |
+| OAuth callback fails | Verify GitHub OAuth app callback URL = `https://api.raycode.tech/api/auth/github/callback` |
 | SSL cert expired | `sudo certbot renew && sudo systemctl reload nginx` |
 | K3s pods not running | `kubectl get pods -A` → `kubectl describe pod <name> -n <ns>` |
 | DB connection error | Check Neon.tech dashboard, verify `DATABASE_URL` in `.env` |
@@ -519,10 +532,10 @@ pm2 reload ecosystem.config.js --update-env
 ```
 Internet
   │
-  ├─ app.yourdomain.tech ──────────────────► Vercel (Next.js frontend)
+  ├─ app.raycode.tech ──────────────────► Vercel (Next.js frontend)
   │
-  └─ api.yourdomain.tech  ─────────────────► EC2 Elastic IP
-  └─ *.yourdomain.tech    ─────────────────► EC2 Elastic IP
+  └─ api.raycode.tech  ─────────────────► EC2 Elastic IP
+  └─ *.raycode.tech    ─────────────────► EC2 Elastic IP
                                                │
                                           nginx :80/:443
                                            ├─ api.*  → PM2 services

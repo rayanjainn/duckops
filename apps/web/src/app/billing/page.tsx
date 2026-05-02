@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { CreditCard, Zap, CheckCircle2, AlertCircle, Loader2, Bot, Folder } from "lucide-react";
 import { Header } from "@/components/layout/Header";
@@ -16,7 +16,7 @@ interface BillingStatus {
   projectCount: number;
 }
 
-export default function BillingPage() {
+function BillingPageInner() {
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<BillingStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -254,5 +254,13 @@ export default function BillingPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function BillingPage() {
+  return (
+    <Suspense fallback={null}>
+      <BillingPageInner />
+    </Suspense>
   );
 }

@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 
-export default function AuthCallbackPage() {
+function AuthCallbackInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { setAuthFromCallback } = useAuth();
@@ -32,5 +32,18 @@ export default function AuthCallbackPage() {
       <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-amber-500" />
       <p className="text-muted-2 text-sm">Signing you in...</p>
     </div>
+  );
+}
+
+export default function AuthCallbackPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-surface flex flex-col items-center justify-center gap-4">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-amber-500" />
+        <p className="text-muted-2 text-sm">Signing you in...</p>
+      </div>
+    }>
+      <AuthCallbackInner />
+    </Suspense>
   );
 }
