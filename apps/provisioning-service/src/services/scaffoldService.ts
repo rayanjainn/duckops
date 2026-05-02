@@ -17,6 +17,12 @@ export interface ScaffoldInput {
   orm: string;
   packageManager: string;
   port?: number;
+  // cloud-mode fields — injected by projectService when DEPLOY_MODE=cloud
+  namespace?: string;
+  githubUsername?: string;
+  registry?: string;
+  domain?: string;
+  isCloud?: boolean;
 }
 
 const TEMPLATES_DIR = path.join(__dirname, "..", "templates");
@@ -34,7 +40,20 @@ export async function scaffoldProject(input: ScaffoldInput): Promise<{ outputDir
     ? input.framework === "nextjs" ? "/api/health" : "/health"
     : "/health";
   const pm = pmCommands(input.packageManager);
-  const ctx = { ...input, port, healthPath, pmInstall: pm.install, pmInstallProd: pm.installProd, pmRun: pm.run, pmExec: pm.exec, pmSetup: pm.setup };
+
+  // Namespace and registry differ between local and cloud deployments
+  const namespace = input.namespace ?? `project-${input.projectName}`;
+  const registry = input.registry ?? "k3d-duckops-registry:5111";
+  const isCloud = input.isCloud ?? false;
+  const domain = input.domain ?? "yourdomain.tech";
+  const githubUsername = input.githubUsername ?? "";
+
+  const ctx = {
+    ...input,
+    port, healthPath,
+    namespace, registry, isCloud, domain, githubUsername,
+    pmInstall: pm.install, pmInstallProd: pm.installProd, pmRun: pm.run, pmExec: pm.exec, pmSetup: pm.setup,
+  };
 
   if (input.framework === "turbo") {
     await scaffoldTurbo(input, ctx, outputDir);

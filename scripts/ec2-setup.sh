@@ -101,9 +101,26 @@ mkdir -p /opt/duckops
 chown -R ubuntu:ubuntu /opt/duckops
 
 # ── 10. AI workspaces user ───────────────────────────────────────────────────
+# _duckops-ai: isolated user for AI code-gen jobs (clone, write, commit, push)
+# No shell login — jobs run as this user via sudo from provisioning-service
 useradd -m -s /bin/false _duckops-ai || true
 mkdir -p /home/_duckops-ai/workspaces
 chown -R _duckops-ai:_duckops-ai /home/_duckops-ai
+
+# Git identity for AI commits (matches githubService.ts commit author)
+sudo -u _duckops-ai git config --global user.name "DuckOps AI"
+sudo -u _duckops-ai git config --global user.email "rayansjain29@gmail.com"
+sudo -u _duckops-ai git config --global credential.helper store
+
+# Allow ubuntu (provisioning-service) to run commands as _duckops-ai without a password
+echo "ubuntu ALL=(_duckops-ai) NOPASSWD: ALL" >> /etc/sudoers.d/duckops-ai
+chmod 440 /etc/sudoers.d/duckops-ai
+
+# Per-GitHub-user Linux accounts are created at runtime by provisioning-service via SSH.
+# The ubuntu user needs sudo permission to run useradd/chown for new DuckOps users.
+echo "ubuntu ALL=(ALL) NOPASSWD: /usr/sbin/useradd, /usr/sbin/userdel, /bin/mkdir, /bin/chown, /bin/rm" \
+  >> /etc/sudoers.d/duckops-provision
+chmod 440 /etc/sudoers.d/duckops-provision
 
 # ── 11. nginx placeholder ────────────────────────────────────────────────────
 cat > /etc/nginx/sites-available/duckops << 'NGINX_EOF'

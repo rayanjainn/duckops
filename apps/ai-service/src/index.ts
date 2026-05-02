@@ -5,6 +5,7 @@ import helmet from "helmet";
 import { createLogger, httpLogger } from "@duckops/shared-utils";
 import { stackRouter } from "./routes/stack.js";
 import { generateRouter } from "./routes/generate.js";
+import { startAiWorker } from "./queues/queue.js";
 
 const logger = createLogger("ai-service");
 const app = express();
@@ -27,4 +28,17 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 
 app.listen(PORT, () => {
   logger.info(`AI service running on port ${PORT}`);
+  // Start BullMQ worker for queued AI jobs (used when DEPLOY_MODE=cloud)
+  startAiWorker(async (job) => {
+    const { projectId, prompt, channelId, userId } = job.data;
+    const { publishChunk } = await import("./queues/queue.js");
+    try {
+      // Delegate to the same generation logic used by the SSE route
+      const { processAiJob } = await import("./services/aiJobProcessor.js");
+      await processAiJob({ projectId, prompt, channelId, userId, publishChunk });
+    } catch (err: any) {
+      await publishChunk(channelId, "error", { message: err.message });
+      throw err;
+    }
+  });
 });

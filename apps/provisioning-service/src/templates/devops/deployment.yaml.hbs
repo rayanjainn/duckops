@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{projectName}}
-  namespace: project-{{projectName}}
+  namespace: {{namespace}}
   labels:
     app: {{projectName}}
 spec:
@@ -17,12 +17,15 @@ spec:
     spec:
       containers:
         - name: {{projectName}}
-          image: k3d-duckops-registry:5111/{{projectName}}:latest
+          image: {{registry}}/{{projectName}}:latest
           ports:
             - containerPort: {{port}}
           env:
             - name: DATABASE_URL
-              value: "postgresql://duckops:duckops123@postgres.project-{{projectName}}.svc.cluster.local:5432/{{projectName}}"
+              valueFrom:
+                configMapKeyRef:
+                  name: {{projectName}}-config
+                  key: DATABASE_URL
             - name: PORT
               value: "{{port}}"
             - name: NODE_ENV

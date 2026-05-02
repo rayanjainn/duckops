@@ -37,7 +37,7 @@ logsRouter.get("/:projectId", requireAuth, async (req, res, next) => {
   try {
     const project = await prisma.project.findUnique({
       where: { id: req.params.projectId as string },
-      select: { id: true, name: true, userId: true },
+      select: { id: true, name: true, namespace: true, userId: true },
     });
 
     if (!project) throw new NotFoundError("Project");
@@ -46,7 +46,7 @@ logsRouter.get("/:projectId", requireAuth, async (req, res, next) => {
     }
 
     const lines = Math.min(Number(req.query.lines) || 100, 500);
-    const logs = await getProjectLogs(project.name, lines);
+    const logs = await getProjectLogs(project.name, project.namespace ?? `project-${project.name}`, lines);
 
     res.json({ logs });
   } catch (err) {

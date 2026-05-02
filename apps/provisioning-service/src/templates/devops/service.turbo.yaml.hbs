@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{projectName}}-api
-  namespace: project-{{projectName}}
+  namespace: {{namespace}}
   labels:
     app: {{projectName}}
 spec:
@@ -19,7 +19,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{projectName}}-web
-  namespace: project-{{projectName}}
+  namespace: {{namespace}}
   labels:
     app: {{projectName}}
 spec:
@@ -36,12 +36,16 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{projectName}}-api
-  namespace: project-{{projectName}}
+  namespace: {{namespace}}
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
+    traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
   rules:
+    {{#if isCloud}}
+    - host: {{projectName}}-api-{{githubUsername}}-duckops.{{domain}}
+    {{else}}
     - host: {{projectName}}-api.localhost
+    {{/if}}
       http:
         paths:
           - path: /
@@ -56,12 +60,16 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{projectName}}-web
-  namespace: project-{{projectName}}
+  namespace: {{namespace}}
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
+    traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
   rules:
+    {{#if isCloud}}
+    - host: {{projectName}}-web-{{githubUsername}}-duckops.{{domain}}
+    {{else}}
     - host: {{projectName}}-web.localhost
+    {{/if}}
       http:
         paths:
           - path: /

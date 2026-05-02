@@ -6,11 +6,15 @@ import { createLogger } from "@duckops/shared-utils";
 import { scaffoldProject } from "./scaffoldService";
 import { runTerraform } from "./terraformService";
 import { runAnsible } from "./ansibleService";
-import { buildAndPushImage } from "./buildService";
+import { buildAndPushImage, deleteEcrImage } from "./buildService";
 import { createAndPushRepo, deleteRepo } from "./githubService";
+import { ensureLinuxUser, createProjectDir, removeProjectDir, sshKubectl } from "./sshService";
 import { io } from "../index";
 
 const logger = createLogger("project-service");
+
+const IS_CLOUD = process.env.DEPLOY_MODE === "cloud";
+const DOMAIN = process.env.DOMAIN || "yourdomain.tech";
 
 export interface CreateProjectInput {
   name: string;
@@ -71,6 +75,15 @@ export async function provisionProject(
 ): Promise<void> {
   // Step 1: Scaffold project files locally
   await updateStatus(projectId, ProjectStatus.SCAFFOLDING, "Assembling project files...", "Render Handlebars templates");
+
+  // Pre-compute namespace so scaffolded K8s manifests use the correct value
+  const scaffoldNamespace = IS_CLOUD
+    ? `${input.githubUsername.toLowerCase().replace(/[^a-z0-9]/g, "")}-${input.name}`
+    : `project-${input.name}`;
+  const scaffoldRegistry = IS_CLOUD
+    ? `${process.env.AWS_ACCOUNT_ID}.dkr.ecr.${process.env.AWS_REGION || "ap-south-1"}.amazonaws.com/duckops`
+    : "k3d-duckops-registry:5111";
+
   const { outputDir } = await scaffoldProject({
     projectName: input.name,
     language: input.language,
@@ -78,6 +91,11 @@ export async function provisionProject(
     database: input.database,
     orm: input.orm,
     packageManager: input.packageManager,
+    namespace: scaffoldNamespace,
+    githubUsername: input.githubUsername,
+    registry: scaffoldRegistry,
+    domain: DOMAIN,
+    isCloud: IS_CLOUD,
   });
   emitStatus(projectId, ProjectStatus.SCAFFOLDING, "Files generated", "Write Dockerfile & K8s manifests");
 
@@ -114,22 +132,35 @@ export async function provisionProject(
     "Push scaffolded code to GitHub",
   );
 
-  // Step 3: Build Docker image and push to local registry
-  await updateStatus(projectId, ProjectStatus.PROVISIONING, "Building Docker image...", "docker build");
-  await buildAndPushImage(input.name, outputDir);
-  emitStatus(projectId, ProjectStatus.PROVISIONING, "Image pushed to registry", "docker push → k3d registry");
+  // Step 2.5 (cloud only): ensure Linux user exists and create project directory
+  if (IS_CLOUD) {
+    await updateStatus(projectId, ProjectStatus.SCAFFOLDING, "Setting up user environment...", "useradd on EC2");
+    await ensureLinuxUser(input.githubUsername);
+    await createProjectDir(input.githubUsername, input.name);
+    emitStatus(projectId, ProjectStatus.SCAFFOLDING, "User environment ready");
+  }
 
-  // Step 4: Terraform
+  // Step 3: Build Docker image and push to registry (k3d local or ECR in cloud)
+  await updateStatus(projectId, ProjectStatus.PROVISIONING, "Building Docker image...", "docker build");
+  const imageTag = await buildAndPushImage(input.name, outputDir);
+  emitStatus(projectId, ProjectStatus.PROVISIONING, `Image pushed: ${imageTag}`, IS_CLOUD ? "docker push → ECR" : "docker push → k3d registry");
+
+  // Step 4: Terraform — create K8s namespace
+  // Namespace format: local = "project-{name}", cloud = "{github}-{project}"
+  const namespace = IS_CLOUD
+    ? `${input.githubUsername.toLowerCase().replace(/[^a-z0-9]/g, "")}-${input.name}`
+    : `project-${input.name}`;
+
   await updateStatus(projectId, ProjectStatus.PROVISIONING, "Creating infrastructure...", "terraform init");
   const terraformResult = await runTerraform({
     projectName: input.name,
-    namespace: `project-${input.name}`,
+    namespace,
     database: input.database,
   });
 
   emitStatus(projectId, ProjectStatus.PROVISIONING, "K8s namespace created", "terraform apply → K8s namespace");
 
-  // Step 5: Ansible — deploy to Kubernetes (image already in registry)
+  // Step 5: Ansible — deploy to Kubernetes
   await updateStatus(projectId, ProjectStatus.CONFIGURING, "Deploying to Kubernetes...", "Run Ansible playbook");
   await runAnsible({
     projectName: input.name,
@@ -140,16 +171,29 @@ export async function provisionProject(
 
   // Step 6: Mark pipeline ready and create Jenkins job
   const isTurbo = input.framework === "turbo";
+
+  // URL format: local = "http://{name}.localhost:8080"
+  //             cloud = "https://{name}-{github}-duckops.{DOMAIN}"
+  const liveUrl = IS_CLOUD
+    ? `https://${input.name}-${input.githubUsername.toLowerCase()}-duckops.${DOMAIN}`
+    : isTurbo
+      ? `http://${input.name}-api.localhost:8080`
+      : `http://${input.name}.localhost:8080`;
+
+  const webUrl = isTurbo
+    ? IS_CLOUD
+      ? `https://${input.name}-web-${input.githubUsername.toLowerCase()}-duckops.${DOMAIN}`
+      : `http://${input.name}-web.localhost:8080`
+    : null;
+
   await prisma.project.update({
     where: { id: projectId },
     data: {
       namespace: terraformResult.namespace,
-      liveUrl: isTurbo
-        ? `http://${input.name}-api.localhost:8080`
-        : `http://${input.name}.localhost:8080`,
-      webUrl: isTurbo ? `http://${input.name}-web.localhost:8080` : null,
+      liveUrl,
+      webUrl,
       internalPort: isTurbo ? 4000 : 3000,
-      externalPort: 8080,
+      externalPort: IS_CLOUD ? 443 : 8080,
       status: ProjectStatus.PIPELINE_READY,
       statusMessage: "Infrastructure ready. Creating CI/CD pipeline...",
     },
@@ -207,8 +251,8 @@ export async function provisionProject(
     projectId,
     ProjectStatus.RUNNING,
     isTurbo
-      ? `API: http://${input.name}-api.localhost:8080 · Web: http://${input.name}-web.localhost:8080`
-      : `Project running at http://${input.name}.localhost:8080`,
+      ? `API: ${liveUrl} · Web: ${webUrl}`
+      : `Project running at ${liveUrl}`,
   );
 
   // Step 9: Apply initial AI prompt now that the project is fully running
@@ -301,12 +345,16 @@ export async function getProject(id: string) {
 const execAsync = promisify(exec);
 
 export async function deleteProject(id: string, githubAccessToken?: string) {
-  const project = await prisma.project.findUnique({ where: { id } });
+  const project = await prisma.project.findUnique({
+    where: { id },
+    include: { user: true },
+  });
   if (!project) return;
 
   const safeNamespace = (project.namespace ?? "").replace(/[^a-z0-9-]/g, "");
   const safeImageName = project.name.replace(/[^a-z0-9._-]/g, "");
   const PIPELINE_SERVICE = process.env.PIPELINE_SERVICE_URL || "http://pipeline-service:4003";
+  const githubUsername = (project as any).user?.githubUsername as string | undefined;
 
   // Run all independent cleanup tasks in parallel
   await Promise.allSettled([
@@ -317,26 +365,32 @@ export async function deleteProject(id: string, githubAccessToken?: string) {
 
     // 2. Delete K8s namespace
     safeNamespace
-      ? execAsync(`kubectl delete namespace ${safeNamespace} --ignore-not-found=true`, { timeout: 30000 })
-          .then(() => logger.info(`Deleted K8s namespace: ${safeNamespace}`))
-          .catch((e) => logger.warn(`Failed to delete K8s namespace ${safeNamespace}: ${e.message}`))
+      ? IS_CLOUD
+        ? sshKubectl(`delete namespace ${safeNamespace} --ignore-not-found=true`)
+            .then(() => logger.info(`Deleted K8s namespace (cloud): ${safeNamespace}`))
+            .catch((e: Error) => logger.warn(`Failed to delete K8s namespace ${safeNamespace}: ${e.message}`))
+        : execAsync(`kubectl delete namespace ${safeNamespace} --ignore-not-found=true`, { timeout: 30000 })
+            .then(() => logger.info(`Deleted K8s namespace: ${safeNamespace}`))
+            .catch((e: Error) => logger.warn(`Failed to delete K8s namespace ${safeNamespace}: ${e.message}`))
       : Promise.resolve(),
 
-    // 3. Delete Docker images from registry + prune dangling layers left by this project's builds
-    execAsync(
-      [
-        // Remove all tagged variants: latest + any numbered build tags
-        `docker images --format "{{.Repository}}:{{.Tag}}" | grep -E "^(localhost:5111|k3d-duckops-registry:5111)/${safeImageName}:" | xargs -r docker rmi --force`,
-        // Prune dangling (untagged) images — these are layers orphaned by the deletions above
-        "docker image prune --force",
-      ].join(" && "),
-      { timeout: 30000 },
-    )
-      .then(() => logger.info(`Deleted Docker images for: ${safeImageName}`))
-      .catch((e) => logger.warn(`Failed to delete Docker images for ${safeImageName}: ${e.message}`)),
+    // 3. Delete images — ECR in cloud, local Docker registry in local mode
+    IS_CLOUD
+      ? deleteEcrImage(safeImageName)
+      : execAsync(
+          [
+            `docker images --format "{{.Repository}}:{{.Tag}}" | grep -E "^(localhost:5111|k3d-duckops-registry:5111)/${safeImageName}:" | xargs -r docker rmi --force`,
+            "docker image prune --force",
+          ].join(" && "),
+          { timeout: 30000 },
+        )
+          .then(() => logger.info(`Deleted local Docker images for: ${safeImageName}`))
+          .catch((e: Error) => logger.warn(`Failed to delete Docker images for ${safeImageName}: ${e.message}`)),
 
-    // 4. Delete scaffolded temp directory
-    fs.rm(`/tmp/duckops-projects/${safeImageName}`, { recursive: true, force: true }).catch(() => {}),
+    // 4. Delete project dir — cloud: /home/u_{github}/projects/{name}, local: /tmp/duckops-projects/{name}
+    IS_CLOUD && githubUsername
+      ? removeProjectDir(githubUsername, safeImageName)
+      : fs.rm(`/tmp/duckops-projects/${safeImageName}`, { recursive: true, force: true }).catch(() => {}),
 
     // 5. Delete Jenkins pipeline via pipeline service
     fetch(`${PIPELINE_SERVICE}/api/pipelines/project/${id}`, { method: "DELETE" }).catch(logger.error),

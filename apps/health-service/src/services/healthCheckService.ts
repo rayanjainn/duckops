@@ -3,10 +3,13 @@ import { prisma, ProjectStatus, HealthStatus } from "@duckops/db";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { createLogger } from "@duckops/shared-utils";
+import { sshExec } from "./sshService";
 import { io } from "../index";
 
 const execAsync = promisify(exec);
 const logger = createLogger("health-check-service");
+
+const IS_CLOUD = process.env.DEPLOY_MODE === "cloud";
 
 export function startHealthCheckCron() {
   // Every 30 seconds
@@ -36,16 +39,9 @@ function healthPath(framework: string): string {
   return framework === "nextjs" ? "/api/health" : "/health";
 }
 
-// Run a health check by executing curl inside the k3d cluster via kubectl.
-//
-// Why: health-service runs in Docker Compose (outside the k3d cluster).
-// The k3d serverlb only forwards NodePorts 30000-30100 to the host — port 80
-// is only bound on the macOS host, not on the Docker network. There is no
-// direct HTTP path from Docker Compose containers into Traefik's port 80.
-//
-// kubectl exec runs curl inside a running pod in the target namespace.
-// That pod IS in the cluster, so K8s service DNS works perfectly.
-// The pod that's already running (the app itself) is used — no extra pods needed.
+// Health check runs kubectl exec inside the cluster to probe via the K8s service DNS.
+// In local mode: kubectl runs directly (health-service is in Docker Compose, kubectl is on the host).
+// In cloud mode: kubectl runs on EC2 via SSH (health-service is a PM2 process on EC2, kubectl is local there).
 async function execHealthCheck(project: {
   name: string;
   namespace: string | null;
@@ -54,15 +50,18 @@ async function execHealthCheck(project: {
   if (!project.namespace) throw new Error("No namespace");
 
   const path = healthPath(project.framework);
-  // Turbo projects have separate api/web services — check the api service
   const serviceName = project.framework === "turbo" ? `${project.name}-api` : project.name;
   const serviceUrl = `http://${serviceName}.${project.namespace}.svc.cluster.local${path}`;
+  const kubectlCmd = `kubectl exec -n ${project.namespace} deploy/${project.name} -- wget -qO- -T 4 "${serviceUrl}" 2>/dev/null`;
 
-  // Run wget inside the app pod — deployment name is always project.name regardless of framework
-  const { stdout } = await execAsync(
-    `kubectl exec -n ${project.namespace} deploy/${project.name} -- wget -qO- -T 4 "${serviceUrl}" 2>/dev/null`,
-    { timeout: 6000 },
-  );
+  let stdout: string;
+  if (IS_CLOUD) {
+    const result = await sshExec(kubectlCmd);
+    stdout = result.stdout;
+  } else {
+    const result = await execAsync(kubectlCmd, { timeout: 6000 });
+    stdout = result.stdout;
+  }
 
   return { statusCode: 200, body: stdout.trim() };
 }
@@ -156,19 +155,25 @@ export async function getProjectHealthHistory(
 
 export async function getProjectLogs(
   projectName: string,
+  namespace: string,
   lines = 100,
 ): Promise<string> {
-  // Sanitize: only allow lowercase alphanumeric and hyphens (matches k8s naming rules)
   const safeName = projectName.replace(/[^a-z0-9-]/g, "");
+  const safeNs = namespace.replace(/[^a-z0-9-]/g, "");
   const safeLines = Math.min(Math.max(1, Math.floor(lines)), 500);
-  if (!safeName) return "Invalid project name";
+  if (!safeName || !safeNs) return "Invalid project name";
+
+  const cmd = `kubectl logs -l app=${safeName} -n ${safeNs} --tail=${safeLines} --timestamps=true 2>&1`;
 
   try {
-    const { stdout, stderr } = await execAsync(
-      `kubectl logs -l app=${safeName} -n project-${safeName} --tail=${safeLines} --timestamps=true 2>&1`,
-      { timeout: 10000 },
-    );
-    const out = stdout || stderr || "";
+    let out: string;
+    if (IS_CLOUD) {
+      const result = await sshExec(cmd);
+      out = result.stdout || result.stderr || "";
+    } else {
+      const result = await execAsync(cmd, { timeout: 10000 });
+      out = result.stdout || result.stderr || "";
+    }
     if (!out.trim()) return "(no output — pod may not have logged anything yet)";
     return out;
   } catch (err: any) {
