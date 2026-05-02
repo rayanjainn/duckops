@@ -2,93 +2,84 @@
 
 import { useEffect, useState } from "react";
 
-interface Item {
-  id: string;
-  name: string;
-  description?: string;
-}
+const ROUTES = [
+  { method: "GET",    path: "/api/health",    desc: "Health check" },
+  { method: "GET",    path: "/api/items",     desc: "List all items" },
+  { method: "POST",   path: "/api/items",     desc: "Create an item" },
+  { method: "DELETE", path: "/api/items/:id", desc: "Delete an item" },
+];
 
-const s: Record<string, React.CSSProperties> = {
-  main:        { maxWidth: 600, margin: "60px auto", fontFamily: "sans-serif", padding: "0 16px" },
-  h1:          { fontSize: 28, fontWeight: 700, marginBottom: 4 },
-  sub:         { color: "#666", marginBottom: 32 },
-  row:         { display: "flex", gap: 8, marginBottom: 24 },
-  input:       { flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid #ddd", fontSize: 14 },
-  addBtn:      { padding: "8px 16px", borderRadius: 8, background: "#0f172a", color: "#fff", border: "none", cursor: "pointer", fontSize: 14 },
-  muted:       { color: "#999" },
-  list:        { listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 8 },
-  item:        { padding: "12px 16px", borderRadius: 10, border: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", alignItems: "center" },
-  itemName:    { margin: 0, fontWeight: 600, fontSize: 14 },
-  itemDesc:    { margin: "2px 0 0", color: "#666", fontSize: 12 },
-  deleteBtn:   { background: "none", border: "none", cursor: "pointer", color: "#999", fontSize: 18, lineHeight: "1" },
-};
+const CSS = `
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:system-ui,sans-serif;color:#111;background:#fff}
+  .page{max-width:720px;margin:80px auto;padding:0 20px}
+  .hero{margin-bottom:48px}
+  .title-row{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+  h1{font-size:36px;font-weight:800}
+  .badge{font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px}
+  .badge-online{background:#dcfce7;color:#16a34a}
+  .badge-offline{background:#fee2e2;color:#dc2626}
+  .badge-checking{background:#f3f4f6;color:#6b7280}
+  .subtitle{font-size:16px;color:#555}
+  .subtitle a{color:#6366f1;text-decoration:none}
+  .section-label{font-size:14px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#888;margin-bottom:12px}
+  .routes{border:1px solid #e5e7eb;border-radius:12px;overflow:hidden}
+  .route-row{display:flex;align-items:center;gap:16px;padding:14px 20px}
+  .route-row:not(:last-child){border-bottom:1px solid #f3f4f6}
+  .route-row:nth-child(even){background:#fafafa}
+  .method{font-size:11px;font-weight:700;font-family:monospace;padding:3px 8px;border-radius:6px;min-width:56px;text-align:center}
+  .m-get{background:#dbeafe;color:#1d4ed8}
+  .m-post{background:#dcfce7;color:#15803d}
+  .m-delete{background:#fee2e2;color:#b91c1c}
+  .route-path{font-size:13px;color:#374151;flex:1}
+  .route-desc{font-size:13px;color:#9ca3af}
+  .footer{margin-top:48px;font-size:13px;color:#bbb;text-align:center}
+`;
 
 export default function Home() {
-  const [items, setItems] = useState<Item[]>([]);
-  const [name, setName] = useState("");
-  const [loading, setLoading] = useState(true);
-
-  const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+  const [apiStatus, setApiStatus] = useState<"checking" | "online" | "offline">("checking");
 
   useEffect(() => {
-    fetch(`${API}/api/items`)
+    const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    fetch(`${API}/api/health`)
       .then((r) => r.json())
-      .then((data) => { setItems(data); setLoading(false); })
-      .catch(() => setLoading(false));
+      .then((d) => setApiStatus(d.status === "ok" ? "online" : "offline"))
+      .catch(() => setApiStatus("offline"));
   }, []);
 
-  const addItem = async () => {
-    if (!name.trim()) return;
-    const res = await fetch(`${API}/api/items`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    if (res.ok) {
-      const item = await res.json();
-      setItems((prev) => [item, ...prev]);
-      setName("");
-    }
-  };
-
-  const deleteItem = async (id: string) => {
-    await fetch(`${API}/api/items/${id}`, { method: "DELETE" });
-    setItems((prev) => prev.filter((i) => i.id !== id));
-  };
-
   return (
-    <main style={s.main}>
-      <h1 style={s.h1}>{{projectName}}</h1>
-      <p style={s.sub}>Turborepo · Next.js + Express + Prisma</p>
+    <>
+      <style>{CSS}</style>
+      <main className="page">
+        <div className="hero">
+          <div className="title-row">
+            <h1>{{projectName}}</h1>
+            <span className={`badge badge-${apiStatus}`}>API {apiStatus}</span>
+          </div>
+          <p className="subtitle">
+            Welcome to <strong>{{projectName}}</strong> — deployed by{" "}
+            <a href="https://duckops.dev">DuckOps</a>.
+            Your app is live and ready to build on.
+          </p>
+        </div>
 
-      <div style={s.row}>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && addItem()}
-          placeholder="New item name..."
-          style={s.input}
-        />
-        <button onClick={addItem} style={s.addBtn}>Add</button>
-      </div>
-
-      {loading ? (
-        <p style={s.muted}>Loading...</p>
-      ) : items.length === 0 ? (
-        <p style={s.muted}>No items yet. Add one above.</p>
-      ) : (
-        <ul style={s.list}>
-          {items.map((item) => (
-            <li key={item.id} style={s.item}>
-              <div>
-                <p style={s.itemName}>{item.name}</p>
-                {item.description && <p style={s.itemDesc}>{item.description}</p>}
+        <section>
+          <h2 className="section-label">Available API Routes</h2>
+          <div className="routes">
+            {ROUTES.map((r) => (
+              <div key={r.path} className="route-row">
+                <span className={`method m-${r.method.toLowerCase()}`}>{r.method}</span>
+                <code className="route-path">{r.path}</code>
+                <span className="route-desc">{r.desc}</span>
               </div>
-              <button onClick={() => deleteItem(item.id)} style={s.deleteBtn} title="Delete">×</button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </main>
+            ))}
+          </div>
+        </section>
+
+        <p className="footer">
+          Use the <strong>AI Builder</strong> in DuckOps to modify this app with natural language.
+        </p>
+      </main>
+    </>
   );
 }

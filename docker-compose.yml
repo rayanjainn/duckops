@@ -33,7 +33,7 @@ services:
       - "6379:6379"
     volumes:
       - redisdata:/data
-    command: redis-server --save "" --appendonly no --maxmemory 96mb --maxmemory-policy allkeys-lru
+    command: redis-server --save "" --appendonly no --maxmemory 256mb --maxmemory-policy noeviction
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -233,9 +233,12 @@ services:
       - "4005:4005"
     environment:
       DATABASE_URL: postgresql://duckops:duckops123@postgres:5432/duckops
+      REDIS_URL: redis://redis:6379
+      PIPELINE_SERVICE_URL: http://pipeline-service:4003
       PORT: "4005"
       NODE_ENV: production
       OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
+      OLLAMA_API_KEY: ${OLLAMA_API_KEY:-}
       OLLAMA_CODE_MODEL: ${OLLAMA_CODE_MODEL:-qwen2.5-coder:7b}
       OLLAMA_STACK_MODEL: ${OLLAMA_STACK_MODEL:-qwen2.5-coder:7b}
     depends_on:

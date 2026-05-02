@@ -1,0 +1,45 @@
+name: PR Check
+
+on:
+  pull_request:
+    branches: [main]
+
+env:
+  PNPM_VERSION: "9.15.4"
+  NODE_VERSION: "22"
+
+jobs:
+  check:
+    name: Type Check & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared packages
+        run: |
+          pnpm --filter @duckops/db build
+          pnpm --filter @duckops/shared-utils build
+          pnpm --filter @duckops/shared-types build
+
+      - name: Type check
+        run: pnpm -r lint
+
+      - name: Check for .env secrets accidentally committed
+        run: |
+          if grep -r "AKIAY42KDOWY\|sk_live_\|sk_test_" --include="*.ts" --include="*.tsx" --include="*.js" .; then
+            echo "ERROR: Possible secret found in source files"
+            exit 1
+          fi
+          echo "No secrets found in source files"

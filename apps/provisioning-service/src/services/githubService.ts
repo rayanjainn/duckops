@@ -92,10 +92,10 @@ export async function createAndPushRepo(
   // 4. Git init, commit, and push
   const gitEnv = {
     ...process.env,
-    GIT_AUTHOR_NAME: "DuckOps",
-    GIT_AUTHOR_EMAIL: "duckops@noreply.github.com",
-    GIT_COMMITTER_NAME: "DuckOps",
-    GIT_COMMITTER_EMAIL: "duckops@noreply.github.com",
+    GIT_AUTHOR_NAME: "DuckOps AI",
+    GIT_AUTHOR_EMAIL: "rayansjain29@gmail.com",
+    GIT_COMMITTER_NAME: "DuckOps AI",
+    GIT_COMMITTER_EMAIL: "rayansjain29@gmail.com",
   };
 
   // Never interpolate the token into command strings — pass it via the

@@ -21,6 +21,8 @@ const generateSchema = z.object({
   sessionId: z.string().optional(),
 });
 
+// ─── Session endpoints ──────────────────────────────────────────────────────
+
 generateRouter.get("/sessions/:projectId", async (req, res) => {
   try {
     const sessions = await (prisma as any).aiSession.findMany({
@@ -49,8 +51,7 @@ generateRouter.get("/sessions/:projectId/:sessionId", async (req, res) => {
   }
 });
 
-// POST /api/generate/stream  — SSE endpoint
-// Clones the project repo, generates code, fixes errors, commits, pushes
+// ─── POST /api/generate/stream — SSE endpoint ──────────────────────────────
 generateRouter.post("/stream", async (req, res, next) => {
   let repoDir: string | null = null;
 
@@ -65,33 +66,26 @@ generateRouter.post("/stream", async (req, res, next) => {
     if (!project) return res.status(404).json({ error: "Project not found" });
     if (!project.githubRepoUrl) return res.status(400).json({ error: "No GitHub repo attached to project" });
 
-    // --- Billing / AI Prompt Limits Enforcement ---
+    // --- Billing / AI Prompt Limits ---
+    // Skip quota check for internal server-to-server calls (provisioning triggering initial prompt)
+    const isInternal = req.headers["x-internal-call"] === process.env.JWT_SECRET;
     const user = project.user as any;
-    if (user.plan === "FREE" && !user.devMode) {
+    if (!isInternal && user.plan === "FREE" && !user.devMode) {
       const now = new Date();
       let remaining = user.aiPromptsRemaining;
       let resetAt = new Date(user.aiPromptsResetAt);
-
       if (now >= resetAt) {
-        // Reset period has passed, give 3 new prompts for the next 6 hours
         remaining = 3;
-        resetAt = new Date(now.getTime() + 6 * 60 * 60 * 1000); // +6 hours
+        resetAt = new Date(now.getTime() + 6 * 60 * 60 * 1000);
       }
-
       if (remaining <= 0) {
         return res.status(403).json({ error: "Free tier limit reached. You get 3 AI prompts every 6 hours." });
       }
-
-      // Decrement usage
       await prisma.user.update({
         where: { id: user.id },
-        data: {
-          aiPromptsRemaining: remaining - 1,
-          aiPromptsResetAt: resetAt,
-        },
+        data: { aiPromptsRemaining: remaining - 1, aiPromptsResetAt: resetAt },
       });
     }
-    // ----------------------------------------------
 
     // SSE headers
     res.setHeader("Content-Type", "text/event-stream");
@@ -104,9 +98,9 @@ generateRouter.post("/stream", async (req, res, next) => {
       res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     };
 
-    // Load message history from DB (ai_messages on the session)
-    let messageHistory: { role: "user" | "assistant"; content: string }[] = [];
+    // Session handling
     let activeSessionId = sessionId;
+    let messageHistory: { role: "user" | "assistant"; content: string }[] = [];
 
     if (activeSessionId) {
       const msgs = await (prisma as any).aiMessage.findMany({
@@ -115,7 +109,6 @@ generateRouter.post("/stream", async (req, res, next) => {
       }).catch(() => []);
       messageHistory = msgs.map((m: any) => ({ role: m.role, content: m.content }));
     } else {
-      // Create new session
       try {
         const session = await (prisma as any).aiSession.create({
           data: { projectId, title: prompt.slice(0, 80) },
@@ -137,7 +130,6 @@ generateRouter.post("/stream", async (req, res, next) => {
 
     send("status", { stage: "generating", message: "Generating code..." });
 
-    // Accumulate streaming chunks for artifact parsing
     let fullAiResponse = "";
     const onChunk = (chunk: string) => {
       fullAiResponse += chunk;
@@ -157,13 +149,12 @@ generateRouter.post("/stream", async (req, res, next) => {
       onChunk,
     });
 
-    const fileCount = actions.filter(a => a.type === "file").length;
+    const fileCount = actions.filter((a: any) => a.type === "file").length;
     send("status", { stage: "writing", message: `Writing ${fileCount} file${fileCount !== 1 ? "s" : ""}...` });
 
     const modifiedFiles = await applyActionsToRepo(repoDir, actions, project.framework);
     send("files", { files: modifiedFiles });
 
-    // Commit + push (skip fix pass — it adds latency and often makes things worse)
     const commitMsg = `feat(ai): ${prompt.slice(0, 72).replace(/\n/g, " ")}`;
     let committedFiles: string[] = [];
 
@@ -180,25 +171,25 @@ generateRouter.post("/stream", async (req, res, next) => {
         committedFiles = modifiedFiles;
         logger.info(`Push succeeded: ${sha}`);
 
-        // Trigger build instantly via pipeline-service
-        const pipelineUrl = process.env.PIPELINE_SERVICE_URL || "http://duckops-pipeline:4003";
-        const triggerPath = `/api/pipelines/project/${project.id}/trigger`;
-        logger.info(`Triggering build at: ${pipelineUrl}${triggerPath}`);
-        
+        // Store commit in DB
         try {
-          const triggerRes = await fetch(`${pipelineUrl}${triggerPath}`, {
-            method: "POST",
+          await (prisma as any).commit.create({
+            data: {
+              projectId,
+              sha,
+              message: commitMsg,
+              author: user.githubUsername,
+              authorAvatar: user.avatarUrl,
+              filesChanged: modifiedFiles.length,
+              committedAt: new Date(),
+            },
           });
-          if (triggerRes.ok) {
-            logger.info("Successfully triggered build via pipeline-service");
-          } else {
-            const errBody = await triggerRes.text().catch(() => "No error body");
-            logger.warn(`Failed to trigger build (HTTP ${triggerRes.status}): ${errBody}`);
-          }
-        } catch (err) {
-          logger.error(`Connection error reaching pipeline-service at ${pipelineUrl}: ${err}`);
-        }
+        } catch { /* new model, may not be migrated yet */ }
 
+        const pipelineUrl = process.env.PIPELINE_SERVICE_URL || "http://localhost:4003";
+        fetch(`${pipelineUrl}/api/pipelines/project/${project.id}/trigger`, {
+          method: "POST",
+        }).catch((e) => logger.warn(`Trigger build failed: ${e.message}`));
       } else {
         logger.warn("No changes were committed (nothing staged)");
       }
@@ -235,7 +226,6 @@ generateRouter.post("/stream", async (req, res, next) => {
       res.end();
     } catch { /* already ended */ }
   } finally {
-    // Cleanup temp dir
     if (repoDir) {
       fs.rm(repoDir, { recursive: true, force: true }).catch(() => {});
     }

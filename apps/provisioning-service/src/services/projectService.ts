@@ -49,21 +49,23 @@ export async function createProject(input: CreateProjectInput) {
 
   emitStatus(project.id, ProjectStatus.INITIALIZING, "Project registered");
 
-  provisionProject(project.id, input).catch((error: Error) => {
-    logger.error(`Provisioning failed for ${project.id}:`, error);
-    prisma.project
-      .update({
-        where: { id: project.id },
-        data: { status: ProjectStatus.FAILED, statusMessage: error.message },
-      })
-      .catch(logger.error);
-    emitStatus(project.id, ProjectStatus.FAILED, error.message);
-  });
+  // Enqueue via BullMQ — worker picks it up asynchronously
+  const { provisioningQueue } = await import("../queues/queue");
+  await provisioningQueue.add(
+    "provision",
+    { projectId: project.id, input },
+    {
+      attempts: 3,
+      backoff: { type: "exponential", delay: 30_000 },
+      removeOnComplete: { count: 50 },
+      removeOnFail: { count: 100 },
+    },
+  );
 
   return project;
 }
 
-async function provisionProject(
+export async function provisionProject(
   projectId: string,
   input: CreateProjectInput,
 ): Promise<void> {
@@ -111,38 +113,6 @@ async function provisionProject(
     `Repository ready: ${repoResult.repoUrl}`,
     "Push scaffolded code to GitHub",
   );
-
-  // ── NEW: Apply AI Prompt if present ──
-  if (input.aiPrompt) {
-    await updateStatus(projectId, ProjectStatus.PROVISIONING, "AI is customizing your project...", "Invoking AI Service");
-    try {
-      const AI_SERVICE = process.env.AI_SERVICE_URL || "http://localhost:4005";
-      const aiRes = await fetch(`${AI_SERVICE}/api/generate/stream`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId,
-          prompt: input.aiPrompt,
-        }),
-      });
-
-      if (!aiRes.ok) {
-        logger.warn(`AI customization failed: ${aiRes.statusText}`);
-      } else {
-        // Wait for streaming to finish (basic drain)
-        const reader = aiRes.body?.getReader();
-        if (reader) {
-          while (true) {
-            const { done } = await reader.read();
-            if (done) break;
-          }
-        }
-        logger.info(`AI customization complete for ${projectId}`);
-      }
-    } catch (err: any) {
-      logger.warn(`AI service call failed: ${err.message}`);
-    }
-  }
 
   // Step 3: Build Docker image and push to local registry
   await updateStatus(projectId, ProjectStatus.PROVISIONING, "Building Docker image...", "docker build");
@@ -240,6 +210,35 @@ async function provisionProject(
       ? `API: http://${input.name}-api.localhost:8080 · Web: http://${input.name}-web.localhost:8080`
       : `Project running at http://${input.name}.localhost:8080`,
   );
+
+  // Step 9: Apply initial AI prompt now that the project is fully running
+  // Fire-and-forget — the user will see results in the AI Builder tab
+  if (input.aiPrompt) {
+    const AI_SERVICE = process.env.AI_SERVICE_URL || "http://localhost:4005";
+    logger.info(`Triggering initial AI prompt for ${projectId}`);
+    fetch(`${AI_SERVICE}/api/generate/stream`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-call": process.env.JWT_SECRET || "",
+      },
+      body: JSON.stringify({ projectId, prompt: input.aiPrompt }),
+    })
+      .then(async (res) => {
+        // Drain the stream so the request completes and the commit+push happens
+        if (res.ok && res.body) {
+          const reader = res.body.getReader();
+          while (true) {
+            const { done } = await reader.read();
+            if (done) break;
+          }
+          logger.info(`Initial AI prompt completed for ${projectId}`);
+        } else {
+          logger.warn(`Initial AI prompt failed: ${res.status} ${res.statusText}`);
+        }
+      })
+      .catch((err: Error) => logger.warn(`Initial AI prompt error (non-fatal): ${err.message}`));
+  }
 }
 
 export async function retryProject(

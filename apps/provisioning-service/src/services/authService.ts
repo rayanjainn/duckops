@@ -21,7 +21,7 @@ export interface GitHubUser {
 export function getGitHubAuthUrl(state: string): string {
   const params = new URLSearchParams({
     client_id: GITHUB_CLIENT_ID,
-    redirect_uri: `${process.env.APP_URL || "http://localhost:4002"}/api/auth/github/callback`,
+    redirect_uri: `${process.env.API_URL || "http://localhost:4002"}/api/auth/github/callback`,
     scope: "user:email repo delete_repo",  // delete_repo needed to remove repos on project delete
     state,
   });

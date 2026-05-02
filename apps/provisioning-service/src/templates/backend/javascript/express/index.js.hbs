@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { db } from "./db";
+import { db } from "./db.js";
 
 dotenv.config();
 
@@ -11,43 +11,76 @@ const PORT = process.env.PORT || {{port}};
 app.use(cors());
 app.use(express.json());
 
-// Health check endpoint
-app.get("/health", (req, res) => {
+const ROUTES = [
+  { method: "GET",    path: "/api/health",    description: "Health check" },
+  { method: "GET",    path: "/api/items",     description: "List all items" },
+  { method: "POST",   path: "/api/items",     description: "Create an item { name, description? }" },
+  { method: "DELETE", path: "/api/items/:id", description: "Delete an item by id" },
+];
+
+app.get("/health", (_req, res) => {
   res.json({ status: "ok", project: "{{projectName}}" });
 });
 
-// Example CRUD routes
-app.get("/api/items", async (req, res) => {
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok", project: "{{projectName}}", routes: ROUTES });
+});
+
+app.get("/", (_req, res) => {
+  res.json({
+    welcome: "Welcome to {{projectName}}",
+    deployedBy: "DuckOps",
+    routes: ROUTES,
+  });
+});
+
+app.get("/api/items", async (_req, res) => {
   try {
 {{#if (eq orm "prisma")}}
-    const items = await db.item.findMany();
+    const items = await db.item.findMany({ orderBy: { createdAt: "desc" } });
 {{else if (eq orm "drizzle")}}
     const items = await db.select().from(schema.items);
 {{else}}
-    const { rows: items } = await db.query("SELECT * FROM items");
+    const { rows: items } = await db.query("SELECT * FROM items ORDER BY created_at DESC");
 {{/if}}
     res.json(items);
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: "Failed to fetch items" });
   }
 });
 
 app.post("/api/items", async (req, res) => {
   try {
-    const { title } = req.body;
+    const { name, description } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: "name is required" });
 {{#if (eq orm "prisma")}}
-    const item = await db.item.create({ data: { title } });
+    const item = await db.item.create({ data: { name, description } });
 {{else if (eq orm "drizzle")}}
-    const [item] = await db.insert(schema.items).values({ title }).returning();
+    const [item] = await db.insert(schema.items).values({ name, description }).returning();
 {{else}}
     const { rows: [item] } = await db.query(
-      "INSERT INTO items (title) VALUES ($1) RETURNING *",
-      [title]
+      "INSERT INTO items (name, description) VALUES ($1, $2) RETURNING *",
+      [name, description ?? null]
     );
 {{/if}}
     res.status(201).json(item);
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: "Failed to create item" });
+  }
+});
+
+app.delete("/api/items/:id", async (req, res) => {
+  try {
+{{#if (eq orm "prisma")}}
+    await db.item.delete({ where: { id: req.params.id } });
+{{else if (eq orm "drizzle")}}
+    await db.delete(schema.items).where(schema.eq(schema.items.id, req.params.id));
+{{else}}
+    await db.query("DELETE FROM items WHERE id = $1", [req.params.id]);
+{{/if}}
+    res.status(204).send();
+  } catch {
+    res.status(500).json({ error: "Failed to delete item" });
   }
 });
 

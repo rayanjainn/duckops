@@ -13,6 +13,7 @@ import { authRouter } from "./routes/auth";
 import { billingRouter } from "./routes/billing";
 import { errorHandler } from "./middleware/errorHandler";
 import { createLogger, httpLogger } from "@duckops/shared-utils";
+import { startProvisioningWorker } from "./queues/queue";
 
 const logger = createLogger("provisioning-service");
 const app = express();
@@ -44,6 +45,7 @@ const PORT = Number(process.env.PORT) || 4002;
 
 httpServer.listen(PORT, () => {
   logger.info(`Provisioning Service running on port ${PORT}`);
+  startProvisioningWorker();
 });
 
 io.on("connection", (socket) => {

@@ -7,7 +7,11 @@ import {
   upsertUserAndCreateSession,
 } from "../services/authService";
 import { requireAuth } from "../middleware/auth";
+import { prisma } from "@duckops/db";
+import { deleteProject } from "../services/projectService";
+import { createLogger } from "@duckops/shared-utils";
 
+const logger = createLogger("auth-route");
 export const authRouter = Router();
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
@@ -48,4 +52,42 @@ authRouter.get("/me", requireAuth, (req, res) => {
 // POST /api/auth/logout — client just drops the JWT, nothing to do server-side
 authRouter.post("/logout", (_req, res) => {
   res.json({ message: "Logged out" });
+});
+
+// DELETE /api/auth/account — full cascade: projects → K8s, Jenkins, ECR, Linux user, DB
+authRouter.delete("/account", requireAuth, async (req, res, next) => {
+  try {
+    const userId = req.user!.id;
+    const githubAccessToken = req.user!.githubAccessToken;
+
+    // 1. Delete all user projects (K8s, Jenkins, GitHub repos, ECR, DB cascades)
+    const projects = await prisma.project.findMany({ where: { userId } });
+    await Promise.allSettled(
+      projects.map((p) =>
+        deleteProject(p.id, githubAccessToken).catch((e) =>
+          logger.warn(`Failed to delete project ${p.id}: ${e.message}`),
+        ),
+      ),
+    );
+
+    // 2. Cancel Stripe subscription if active
+    const user = await prisma.user.findUnique({ where: { id: userId } }) as any;
+    if (user?.stripeSubscriptionId && process.env.STRIPE_SECRET_KEY) {
+      try {
+        const Stripe = require("stripe");
+        const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2025-03-31.basil" });
+        await stripe.subscriptions.cancel(user.stripeSubscriptionId);
+      } catch (e: any) {
+        logger.warn(`Failed to cancel Stripe subscription: ${e.message}`);
+      }
+    }
+
+    // 3. Delete DB user (cascades to remaining records via FK)
+    await prisma.user.delete({ where: { id: userId } });
+
+    logger.info(`Account deleted: ${userId} (@${req.user!.githubUsername})`);
+    res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
 });

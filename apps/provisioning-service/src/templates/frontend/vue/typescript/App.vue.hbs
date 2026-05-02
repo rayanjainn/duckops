@@ -1,91 +1,94 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 
-interface Item {
-  id: number
-  title: string
-  completed: boolean
-}
+interface Route { method: string; path: string; description: string }
 
-const items = ref<Item[]>([])
-const newTitle = ref('')
-const loading = ref(true)
+const ROUTES: Route[] = [
+  { method: 'GET',    path: '/api/health',    description: 'Health check' },
+  { method: 'GET',    path: '/api/items',     description: 'List all items' },
+  { method: 'POST',   path: '/api/items',     description: 'Create an item { name, description? }' },
+  { method: 'DELETE', path: '/api/items/:id', description: 'Delete an item by id' },
+]
+
+const apiStatus = ref<'checking' | 'online' | 'offline'>('checking')
 const API = import.meta.env.VITE_API_URL || ''
 
 onMounted(async () => {
   try {
-    const res = await fetch(`${API}/api/items`)
-    items.value = await res.json()
-  } finally {
-    loading.value = false
+    const res = await fetch(`${API}/api/health`)
+    const d = await res.json()
+    apiStatus.value = d.status === 'ok' ? 'online' : 'offline'
+  } catch {
+    apiStatus.value = 'offline'
   }
 })
 
-async function addItem() {
-  if (!newTitle.value.trim()) return
-  const res = await fetch(`${API}/api/items`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title: newTitle.value }),
-  })
-  items.value.push(await res.json())
-  newTitle.value = ''
+function methodBg(m: string) {
+  return m === 'GET' ? '#dbeafe' : m === 'POST' ? '#dcfce7' : '#fee2e2'
+}
+function methodColor(m: string) {
+  return m === 'GET' ? '#1d4ed8' : m === 'POST' ? '#15803d' : '#b91c1c'
 }
 </script>
 
 <template>
-  <div class="app">
-    <h1>{{projectName}}</h1>
-    <p class="subtitle">Built with Vue 3 + Vite · Deployed by DuckOps</p>
-
-    <div class="add-item">
-      <input
-        v-model="newTitle"
-        @keydown.enter="addItem"
-        placeholder="Add an item..."
-      />
-      <button @click="addItem">Add</button>
+  <div class="container">
+    <div class="hero">
+      <div class="title-row">
+        <h1>{{projectName}}</h1>
+        <span :class="['badge', apiStatus]">API \{{ apiStatus }}</span>
+      </div>
+      <p class="subtitle">
+        Welcome to <strong>{{projectName}}</strong> — deployed by
+        <a href="https://duckops.dev">DuckOps</a>.
+        Your app is live and ready to build on.
+      </p>
     </div>
 
-    <p v-if="loading">Loading...</p>
-    <ul v-else>
-      <li v-for="item in items" :key="item.id" :class="{ done: item.completed }">
-        \{{ item.title }}
-      </li>
-      <li v-if="items.length === 0" class="empty">No items yet.</li>
-    </ul>
+    <section>
+      <h2 class="section-label">Available API Routes</h2>
+      <div class="routes">
+        <div v-for="(r, i) in ROUTES" :key="r.path" :class="['route-row', i % 2 === 0 ? 'even' : 'odd']">
+          <span class="method" :style="{ background: methodBg(r.method), color: methodColor(r.method) }">
+            \{{ r.method }}
+          </span>
+          <code class="path">\{{ r.path }}</code>
+          <span class="desc">\{{ r.description }}</span>
+        </div>
+      </div>
+    </section>
+
+    <p class="footer">Use the <strong>AI Builder</strong> in DuckOps to modify this app with natural language.</p>
   </div>
 </template>
 
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: #0f172a; color: #e2e8f0;
-  min-height: 100vh; display: flex; justify-content: center; padding: 3rem 1rem;
+body { font-family: system-ui, sans-serif; color: #111; }
+.container { max-width: 720px; margin: 80px auto; padding: 0 20px; }
+.hero { margin-bottom: 48px; }
+.title-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+h1 { font-size: 36px; font-weight: 800; }
+.badge { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 20px; }
+.badge.online  { background: #dcfce7; color: #16a34a; }
+.badge.offline { background: #fee2e2; color: #dc2626; }
+.badge.checking { background: #f3f4f6; color: #6b7280; }
+.subtitle { font-size: 16px; color: #555; }
+.subtitle a { color: #6366f1; text-decoration: none; }
+.section-label {
+  font-size: 14px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: #888; margin-bottom: 12px;
 }
-.app { width: 100%; max-width: 560px; }
-h1 {
-  font-size: 2rem; font-weight: 700;
-  background: linear-gradient(135deg, #42d392, #647eff);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-  margin-bottom: 0.25rem;
+.routes { border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
+.route-row { display: flex; align-items: center; gap: 16px; padding: 14px 20px; }
+.route-row.even { background: #fff; }
+.route-row.odd  { background: #fafafa; }
+.route-row + .route-row { border-top: 1px solid #f3f4f6; }
+.method {
+  font-size: 11px; font-weight: 700; font-family: monospace;
+  padding: 3px 8px; border-radius: 6px; min-width: 56px; text-align: center;
 }
-.subtitle { color: #64748b; font-size: 0.875rem; margin-bottom: 2rem; }
-.add-item { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
-input {
-  flex: 1; padding: 0.625rem 0.875rem; background: #1e293b;
-  border: 1px solid #334155; border-radius: 8px; color: #e2e8f0;
-  font-size: 0.9rem; outline: none;
-}
-input:focus { border-color: #42d392; }
-button {
-  padding: 0.625rem 1.25rem; background: #42d392; color: #0f172a;
-  border: none; border-radius: 8px; font-size: 0.9rem; cursor: pointer; font-weight: 600;
-}
-button:hover { background: #34c07a; }
-ul { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
-li { padding: 0.875rem 1rem; background: #1e293b; border: 1px solid #334155; border-radius: 8px; }
-li.done { opacity: 0.4; text-decoration: line-through; }
-li.empty { color: #475569; text-align: center; }
+.path { font-size: 13px; color: #374151; flex: 1; }
+.desc { font-size: 13px; color: #9ca3af; }
+.footer { margin-top: 48px; font-size: 13px; color: #bbb; text-align: center; }
 </style>

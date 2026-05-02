@@ -9,15 +9,30 @@ const PORT = process.env.PORT || 4000;
 app.use(cors());
 app.use(express.json());
 
+const ROUTES = [
+  { method: "GET",    path: "/api/health",    description: "Health check" },
+  { method: "GET",    path: "/api/items",     description: "List all items" },
+  { method: "POST",   path: "/api/items",     description: "Create an item { name, description? }" },
+  { method: "DELETE", path: "/api/items/:id", description: "Delete an item by id" },
+];
+
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "{{projectName}}-api" });
+});
+
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok", service: "{{projectName}}-api", routes: ROUTES });
+});
+
+app.get("/", (_req, res) => {
+  res.json({ welcome: "Welcome to {{projectName}}", deployedBy: "DuckOps", routes: ROUTES });
 });
 
 app.get("/api/items", async (_req, res) => {
   try {
     const items = await prisma.item.findMany({ orderBy: { createdAt: "desc" } });
     res.json(items);
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Failed to fetch items" });
   }
 });
@@ -25,10 +40,10 @@ app.get("/api/items", async (_req, res) => {
 app.post("/api/items", async (req, res) => {
   try {
     const { name, description } = req.body as { name: string; description?: string };
-    if (!name) { res.status(400).json({ error: "name is required" }); return; }
+    if (!name?.trim()) { res.status(400).json({ error: "name is required" }); return; }
     const item = await prisma.item.create({ data: { name, description } });
     res.status(201).json(item);
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Failed to create item" });
   }
 });

@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import dotenv from "dotenv";
-import { db } from "./db";
+import { db } from "./db.js";
 
 dotenv.config();
 
@@ -10,43 +10,66 @@ const PORT = Number(process.env.PORT) || {{port}};
 
 fastify.register(cors, { origin: true });
 
-// Health check
+const ROUTES = [
+  { method: "GET",    path: "/api/health",    description: "Health check" },
+  { method: "GET",    path: "/api/items",     description: "List all items" },
+  { method: "POST",   path: "/api/items",     description: "Create an item { name, description? }" },
+  { method: "DELETE", path: "/api/items/:id", description: "Delete an item by id" },
+];
+
 fastify.get("/health", async () => {
   return { status: "ok", project: "{{projectName}}" };
 });
 
-// Example CRUD routes
+fastify.get("/api/health", async () => {
+  return { status: "ok", project: "{{projectName}}", routes: ROUTES };
+});
+
+fastify.get("/", async () => {
+  return { welcome: "Welcome to {{projectName}}", deployedBy: "DuckOps", routes: ROUTES };
+});
+
 fastify.get("/api/items", async () => {
 {{#if (eq orm "prisma")}}
-  return db.item.findMany();
+  return db.item.findMany({ orderBy: { createdAt: "desc" } });
 {{else if (eq orm "drizzle")}}
   return db.select().from(schema.items);
 {{else}}
-  const { rows } = await db.query("SELECT * FROM items");
+  const { rows } = await db.query("SELECT * FROM items ORDER BY created_at DESC");
   return rows;
 {{/if}}
 });
 
 fastify.post("/api/items", async (request, reply) => {
-  const { title } = request.body;
+  const { name, description } = request.body;
+  if (!name?.trim()) { reply.status(400); return { error: "name is required" }; }
 {{#if (eq orm "prisma")}}
-  const item = await db.item.create({ data: { title } });
+  const item = await db.item.create({ data: { name, description } });
 {{else if (eq orm "drizzle")}}
-  const [item] = await db.insert(schema.items).values({ title }).returning();
+  const [item] = await db.insert(schema.items).values({ name, description }).returning();
 {{else}}
   const { rows: [item] } = await db.query(
-    "INSERT INTO items (title) VALUES ($1) RETURNING *",
-    [title]
+    "INSERT INTO items (name, description) VALUES ($1, $2) RETURNING *",
+    [name, description ?? null]
   );
 {{/if}}
   reply.status(201);
   return item;
 });
 
+fastify.delete("/api/items/:id", async (request, reply) => {
+  const { id } = request.params;
+{{#if (eq orm "prisma")}}
+  await db.item.delete({ where: { id } });
+{{else if (eq orm "drizzle")}}
+  await db.delete(schema.items).where(schema.eq(schema.items.id, id));
+{{else}}
+  await db.query("DELETE FROM items WHERE id = $1", [id]);
+{{/if}}
+  reply.status(204).send();
+});
+
 fastify.listen({ port: PORT, host: "0.0.0.0" }, (err) => {
-  if (err) {
-    fastify.log.error(err);
-    process.exit(1);
-  }
+  if (err) { fastify.log.error(err); process.exit(1); }
   console.log(`{{projectName}} running on port ${PORT}`);
 });

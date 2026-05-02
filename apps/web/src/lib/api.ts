@@ -119,11 +119,16 @@ export const billingApi = {
   getPortal: (): Promise<{ url: string }> =>
     api.post("/api/billing/portal").then((r) => r.data),
 
-  getStatus: (): Promise<{ plan: string; devMode: boolean; aiPromptsRemaining: number; projectCount: number }> =>
+  getStatus: (): Promise<{ plan: string; devMode: boolean; aiPromptsRemaining: number; aiPromptsResetAt: string; projectCount: number }> =>
     api.get("/api/billing/status").then((r) => r.data),
 
   toggleDevMode: (): Promise<{ devMode: boolean }> =>
     api.post("/api/billing/dev-mode").then((r) => r.data),
+};
+
+export const authApi = {
+  me: () => api.get("/api/auth/me").then((r) => r.data),
+  deleteAccount: () => api.delete("/api/auth/account").then(() => undefined),
 };
 
 export interface StackRecommendation {

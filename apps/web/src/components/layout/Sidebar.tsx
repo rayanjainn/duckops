@@ -14,6 +14,7 @@ import {
   GraduationCap,
   CreditCard,
   Zap,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -26,6 +27,7 @@ const navItems = [
   { href: "/projects/new", label: "New Project", icon: Plus, exact: true },
   { href: "/templates", label: "Templates", icon: BookOpen, exact: true },
   { href: "/billing", label: "Billing", icon: CreditCard, exact: true },
+  { href: "/settings", label: "Settings", icon: Settings, exact: true },
 ];
 
 function isActive(pathname: string, href: string, exact: boolean): boolean {
@@ -154,19 +156,21 @@ export function Sidebar() {
       <div className={cn("p-3 border-t border-border", collapsed && "px-2")}>
         {user ? (
           <div className={cn("flex items-center gap-3", collapsed && "flex-col gap-2")}>
-            {user.avatarUrl ? (
-              <Image
-                src={user.avatarUrl}
-                alt={user.name}
-                width={32}
-                height={32}
-                className="rounded-full shrink-0 ring-2 ring-border-2"
-              />
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-amber-600 flex items-center justify-center text-sm font-bold shrink-0">
-                {user.name.charAt(0).toUpperCase()}
-              </div>
-            )}
+            <Link href="/settings" title="Account settings" className="shrink-0">
+              {user.avatarUrl ? (
+                <Image
+                  src={user.avatarUrl}
+                  alt={user.name}
+                  width={32}
+                  height={32}
+                  className="rounded-full ring-2 ring-border-2 hover:ring-amber-500/50 transition-all"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-amber-600 flex items-center justify-center text-sm font-bold hover:bg-amber-500 transition-all">
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+            </Link>
             {!collapsed && (
               <>
                 <div className="flex-1 min-w-0">

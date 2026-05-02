@@ -24,9 +24,10 @@ model User {
   stripeCustomerId      String?   @unique
   stripeSubscriptionId  String?
   stripeSubStatus       String?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
   projects              Project[]
+  awsConnection         AwsConnection?
 }
 
 model TemplateOption {
@@ -73,6 +74,8 @@ model Project {
   healthChecks       HealthCheck[]
   pipeline           Pipeline?
   aiSessions         AiSession[]
+  builds             Build[]
+  commits            Commit[]
   user               User          @relation(fields: [userId], references: [id])
 }
 
@@ -193,4 +196,63 @@ model AiMessage {
 enum Plan {
   FREE
   PRO
+}
+
+model Build {
+  id          String    @id @default(cuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  buildNumber Int
+  jobName     String
+  status      String    // QUEUED, RUNNING, SUCCESS, FAILURE, ABORTED
+  triggeredAt DateTime  @default(now())
+  finishedAt  DateTime?
+  duration    Int?
+  gitCommit   String?
+  gitBranch   String    @default("main")
+  logs        BuildLog[]
+
+  @@index([projectId])
+}
+
+model BuildLog {
+  id        String   @id @default(cuid())
+  buildId   String
+  build     Build    @relation(fields: [buildId], references: [id], onDelete: Cascade)
+  content   String   @db.Text
+  fetchedAt DateTime @default(now())
+}
+
+model Commit {
+  id           String   @id @default(cuid())
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sha          String
+  message      String
+  author       String
+  authorAvatar String?
+  filesChanged Int?
+  additions    Int?
+  deletions    Int?
+  committedAt  DateTime
+  createdAt    DateTime @default(now())
+
+  @@unique([projectId, sha])
+  @@index([projectId])
+}
+
+model AwsConnection {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessKeyId     String
+  secretAccessKey String
+  region          String   @default("ap-south-1")
+  ec2InstanceId   String?
+  ec2PublicIp     String?
+  sshPrivateKey   String?
+  ecrRegistryUrl  String?
+  deployMode      String   @default("local")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }

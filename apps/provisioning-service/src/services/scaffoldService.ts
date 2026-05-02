@@ -138,7 +138,7 @@ async function scaffoldFrontend(
     );
 
     const configTpl = await loadTemplate(`frontend/nextjs/${tLang}/next.config.ts.hbs`);
-    await writeFile(path.join(outputDir, "next.config.ts"), configTpl(ctx));
+    await writeFile(path.join(outputDir, "next.config.js"), configTpl(ctx));
 
     const cssTpl = await loadTemplate(`frontend/nextjs/${tLang}/globals.css.hbs`);
     await writeFile(path.join(outputDir, "app", "globals.css"), cssTpl(ctx));
@@ -271,7 +271,7 @@ async function scaffoldTurbo(
   await writeFile(path.join(outputDir, "apps", "web", "app", "layout.tsx"), webLayoutTpl(ctx));
 
   const webNextTpl = await loadTemplate(`${tplDir}/web-next.config.ts.hbs`);
-  await writeFile(path.join(outputDir, "apps", "web", "next.config.ts"), webNextTpl(ctx));
+  await writeFile(path.join(outputDir, "apps", "web", "next.config.js"), webNextTpl(ctx));
 
   await writeFile(
     path.join(outputDir, "apps", "web", "tsconfig.json"),

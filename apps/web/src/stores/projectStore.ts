@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import type { ProjectStatus } from "@duckops/shared-types";
 import type { AiStep } from "@/lib/aiStreamParser";
 
@@ -41,7 +42,9 @@ const DEFAULT_AI_SESSION = (): AiSessionState => ({
   fileContent: "",
 });
 
-export const useProjectStore = create<ProjectStore>((set, get) => ({
+export const useProjectStore = create<ProjectStore>()(
+  persist(
+    (set, get) => ({
   selectedProjectId: null,
   liveStatuses: {},
   aiSessions: {},
@@ -87,4 +90,24 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         },
       };
     }),
-}));
+    }),
+    {
+      name: "duckops-project-store",
+      partialize: (state) => ({ aiSessions: state.aiSessions }),
+      merge: (persisted: any, current) => {
+        // Clear any in-progress streaming state from previous sessions
+        const aiSessions = { ...(persisted?.aiSessions ?? {}) };
+        for (const key of Object.keys(aiSessions)) {
+          aiSessions[key] = {
+            ...aiSessions[key],
+            loading: false,
+            messages: (aiSessions[key].messages ?? []).map((m: any) =>
+              m.streaming ? { ...m, streaming: false } : m,
+            ),
+          };
+        }
+        return { ...current, aiSessions };
+      },
+    },
+  )
+);

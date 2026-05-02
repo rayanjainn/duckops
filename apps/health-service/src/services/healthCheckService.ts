@@ -54,9 +54,11 @@ async function execHealthCheck(project: {
   if (!project.namespace) throw new Error("No namespace");
 
   const path = healthPath(project.framework);
-  const serviceUrl = `http://${project.name}.${project.namespace}.svc.cluster.local${path}`;
+  // Turbo projects have separate api/web services — check the api service
+  const serviceName = project.framework === "turbo" ? `${project.name}-api` : project.name;
+  const serviceUrl = `http://${serviceName}.${project.namespace}.svc.cluster.local${path}`;
 
-  // Run curl inside the app pod — available in the node:alpine base image
+  // Run wget inside the app pod — deployment name is always project.name regardless of framework
   const { stdout } = await execAsync(
     `kubectl exec -n ${project.namespace} deploy/${project.name} -- wget -qO- -T 4 "${serviceUrl}" 2>/dev/null`,
     { timeout: 6000 },
