@@ -19,7 +19,7 @@ Every tool used in this project, what it does, where it lives in the codebase, a
 11. [Jenkins](#11-jenkins)
 12. [Nginx](#12-nginx)
 13. [PostgreSQL + Prisma](#13-postgresql--prisma)
-14. [Redis](#14-redis)
+14. [Redis + BullMQ](#14-redis--bullmq)
 15. [Socket.io](#15-socketio)
 16. [Handlebars (hbs)](#16-handlebars-hbs)
 17. [Traefik Ingress](#17-traefik-ingress)
@@ -27,7 +27,7 @@ Every tool used in this project, what it does, where it lives in the codebase, a
 19. [Zod](#19-zod)
 20. [GitHub OAuth + API](#20-github-oauth--api)
 21. [TanStack Query (React Query)](#21-tanstack-query-react-query)
-22. [Prometheus + Grafana](#22-prometheus--grafana)
+22. [AI Service (Ollama)](#22-ai-service-ollama)
 23. [node-cron](#23-node-cron)
 
 ---
@@ -347,17 +347,31 @@ TemplateOption (standalone — seeded on startup)
 
 ---
 
-## 14. Redis
+## 14. Redis + BullMQ
 
-**What it is:** An in-memory data structure store — key-value cache, pub/sub, session store.
+**What it is:** Redis is an in-memory data structure store. BullMQ is a Node.js job queue library that uses Redis as its backing store.
 
-**Why we use it:** Currently used as a cache layer and session store for the provisioning service. Redis is included in the stack for fast ephemeral storage (e.g. rate limiting, short-lived tokens, future job queuing).
+**Why we use it:** Provisioning a project takes 2-5 minutes and involves Docker builds, Terraform, Ansible, and Jenkins calls — far too long for a synchronous HTTP request. BullMQ enqueues each "create project" request as a persistent job. Jobs survive service restarts (stored in Redis), automatically retry on failure (exponential backoff: 30s, 60s, 120s), and run with controlled concurrency (2 projects at once).
 
 **Where it lives:**
-- `docker-compose.yml` — `redis` service, port 6379
-- Referenced in `REDIS_URL` env var across services
+- `docker-compose.yml` — `redis` service, port 6379; `maxmemory-policy noeviction` so Redis never silently drops jobs
+- `apps/provisioning-service/src/queues/provisioningQueue.ts` — queue + worker definition
+- `apps/provisioning-service/src/queues/provisioningWorker.ts` — processes jobs, runs 8-stage provisioning pipeline
 
-**Configuration:** `--maxmemory 96mb --maxmemory-policy allkeys-lru` — bounded memory with LRU eviction, safe for a development machine.
+**Key configuration:**
+```typescript
+{
+  attempts: 3,
+  backoff: { type: "exponential", delay: 30_000 },
+  lockDuration: 600_000,  // 10 min — prevents lock expiry during Docker builds
+  concurrency: 2,
+}
+```
+
+**How it helps:**
+- The HTTP `POST /api/projects` returns immediately after enqueuing; status flows back via Socket.io
+- If the provisioning service crashes mid-build, the job stays in Redis and retries on restart
+- Failed jobs are inspectable via `redis-cli llen bull:provisioning-queue:failed`
 
 ---
 
@@ -502,19 +516,29 @@ logger.error(`Provisioning failed: ${error.message}`);
 
 ---
 
-## 22. Prometheus + Grafana
+## 22. AI Service (Ollama)
 
-**What it is:** Prometheus scrapes metrics from services on a schedule and stores them in a time-series DB. Grafana visualizes those metrics in dashboards.
+**What it is:** A dedicated microservice at `:4005` that streams AI-generated code and explanations to the frontend using Server-Sent Events (SSE).
 
-**Why we use it:** While the health-service handles application-level health checks (HTTP probes), Prometheus+Grafana provides infrastructure-level observability — CPU usage, memory, request latency, error rates.
+**Why we use it:** DuckOps includes an AI code builder that lets users describe changes to their scaffolded project and receive generated code. The AI service is isolated from other services so SSE streams don't block provisioning or pipeline requests.
 
 **Where it lives:**
-- `monitoring/` — Prometheus config (`prometheus.yml`) and Grafana provisioning files
+- `apps/ai-service/src/` — Express app with SSE streaming
+- `apps/ai-service/src/services/ollamaService.ts` — calls Ollama API with `stream: true`
+- `apps/web/src/stores/projectStore.ts` — Zustand store with `persist` middleware (sessions saved to localStorage)
 
-**Note:** Monitoring is included in the stack configuration but not started by default in `setup-local.sh` to conserve resources on local machines. Start with:
-```bash
-docker compose --profile monitoring up -d
+**Configuration:**
+```env
+OLLAMA_HOST=https://ollama.com          # cloud API
+OLLAMA_API_KEY=...
+OLLAMA_CODE_MODEL=qwen3-coder:480b      # code generation
+OLLAMA_STACK_MODEL=qwen3-coder:480b     # stack recommendations
 ```
+
+**How it helps:**
+- SSE means the AI response appears token-by-token in the browser — no waiting for full completion
+- Sessions (chat history) are persisted to localStorage so AI conversations survive page refreshes
+- If `aiPrompt` was set at project creation, the AI service fires it automatically once the project reaches `RUNNING`
 
 ---
 
@@ -537,4 +561,4 @@ docker compose --profile monitoring up -d
 
 ---
 
-*Last updated: April 2026*
+*Last updated: May 2026*

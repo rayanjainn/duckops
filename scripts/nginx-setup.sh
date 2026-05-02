@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Configure nginx for DuckOps on EC2
-# Usage: bash scripts/nginx-setup.sh yourdomain.tech
+# app.yourdomain.tech → Vercel (handled by DNS CNAME, not nginx)
+# api.yourdomain.tech → EC2 backend services
+# *.yourdomain.tech   → K3s Traefik (deployed projects)
+# Usage: sudo bash scripts/nginx-setup.sh yourdomain.tech
 # Run AFTER ec2-setup.sh and BEFORE certbot
 
 set -euo pipefail
@@ -8,7 +11,8 @@ set -euo pipefail
 DOMAIN="${1:?Usage: $0 yourdomain.tech}"
 
 cat > /etc/nginx/sites-available/duckops << EOF
-# DuckOps — api.${DOMAIN} → backends, *.${DOMAIN} → K3s Traefik
+# DuckOps nginx — EC2 only
+# app.${DOMAIN} is handled by Vercel (CNAME in DNS), not nginx
 
 # HTTP → HTTPS redirect
 server {
@@ -17,7 +21,7 @@ server {
     return 301 https://\$host\$request_uri;
 }
 
-# DuckOps API backends
+# ── Backend API services ──────────────────────────────────────────────────
 server {
     listen 443 ssl;
     server_name api.${DOMAIN};
@@ -29,22 +33,16 @@ server {
 
     client_max_body_size 50m;
 
-    location /api/auth        { proxy_pass http://localhost:4002; include /etc/nginx/proxy_params; }
-    location /api/projects    { proxy_pass http://localhost:4002; include /etc/nginx/proxy_params; }
-    location /api/billing     { proxy_pass http://localhost:4002; include /etc/nginx/proxy_params; }
-    location /api/templates   { proxy_pass http://localhost:4001; include /etc/nginx/proxy_params; }
-    location /api/health      { proxy_pass http://localhost:4004; include /etc/nginx/proxy_params; }
-    location /api/logs        { proxy_pass http://localhost:4004; include /etc/nginx/proxy_params; }
+    location /api/auth      { proxy_pass http://localhost:4002; include /etc/nginx/proxy_params; }
+    location /api/projects  { proxy_pass http://localhost:4002; include /etc/nginx/proxy_params; }
+    location /api/billing   { proxy_pass http://localhost:4002; include /etc/nginx/proxy_params; }
+    location /api/templates { proxy_pass http://localhost:4001; include /etc/nginx/proxy_params; }
+    location /api/options   { proxy_pass http://localhost:4001; include /etc/nginx/proxy_params; }
+    location /api/health    { proxy_pass http://localhost:4004; include /etc/nginx/proxy_params; }
+    location /api/logs      { proxy_pass http://localhost:4004; include /etc/nginx/proxy_params; }
 
-    # SSE — disable buffering
     location /api/pipelines {
         proxy_pass http://localhost:4003;
-        proxy_buffering off;
-        proxy_read_timeout 300s;
-        include /etc/nginx/proxy_params;
-    }
-    location /api/ai {
-        proxy_pass http://localhost:4005;
         proxy_buffering off;
         proxy_read_timeout 300s;
         include /etc/nginx/proxy_params;
@@ -52,7 +50,9 @@ server {
     location /api/generate {
         proxy_pass http://localhost:4005;
         proxy_buffering off;
+        proxy_cache off;
         proxy_read_timeout 300s;
+        proxy_set_header Connection "";
         include /etc/nginx/proxy_params;
     }
     location /api/stack {
@@ -60,7 +60,7 @@ server {
         include /etc/nginx/proxy_params;
     }
 
-    # Socket.IO
+    # Socket.IO real-time updates
     location /socket.io/ {
         proxy_pass http://localhost:4002;
         proxy_http_version 1.1;
@@ -70,17 +70,17 @@ server {
     }
 }
 
-# User-deployed apps → K3s Traefik (wildcard)
+# ── User-deployed project subdomains → K3s Traefik (wildcard) ────────────
 server {
     listen 443 ssl;
-    server_name ~^.+-duckops\\.${DOMAIN//./\\.}\$;
+    server_name *.${DOMAIN};
 
     ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
     ssl_protocols       TLSv1.2 TLSv1.3;
 
     location / {
-        proxy_pass http://localhost:80;
+        proxy_pass http://localhost:30080;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -89,7 +89,7 @@ server {
 }
 EOF
 
-# Write shared proxy params if not present
+# Shared proxy params
 cat > /etc/nginx/proxy_params << 'PARAMS_EOF'
 proxy_set_header Host $http_host;
 proxy_set_header X-Real-IP $remote_addr;
@@ -99,8 +99,13 @@ proxy_http_version 1.1;
 PARAMS_EOF
 
 nginx -t && systemctl reload nginx
-echo "nginx configured for ${DOMAIN}"
 echo ""
-echo "Now run SSL cert:"
-echo "  certbot --nginx -d ${DOMAIN} -d api.${DOMAIN} --agree-tos --non-interactive -m YOUR_EMAIL"
-echo "  (wildcard cert needs DNS challenge — see DEPLOYMENT.md for details)"
+echo "==> nginx configured for ${DOMAIN}"
+echo ""
+echo "Now issue SSL cert (wildcard requires DNS challenge):"
+echo ""
+echo "  sudo certbot certonly --manual --preferred-challenges dns \\"
+echo "    -d ${DOMAIN} -d '*.${DOMAIN}' \\"
+echo "    --agree-tos -m your@email.com"
+echo ""
+echo "  Then reload nginx: sudo systemctl reload nginx"

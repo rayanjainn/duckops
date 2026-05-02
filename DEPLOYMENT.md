@@ -133,12 +133,14 @@ Go to your domain registrar (e.g. Namecheap, GoDaddy, Cloudflare):
 
 | Type | Name | Value | TTL |
 |------|------|-------|-----|
+| A | `@` | `<EC2 Elastic IP>` | 300 |
 | A | `api` | `<EC2 Elastic IP>` | 300 |
-| A | `@` | `76.76.21.21` | 300 |
 | CNAME | `app` | `cname.vercel-dns.com` | 300 |
 | A | `*` | `<EC2 Elastic IP>` | 300 |
 
-> The `*` wildcard catches all `{project}-{github}-duckops.yourdomain.tech` subdomains.
+> `app.yourdomain.tech` → Vercel (Next.js frontend)
+> `api.yourdomain.tech` → EC2 (backend services)
+> `*.yourdomain.tech` → EC2 wildcard → K3s Traefik → deployed projects
 
 Wait 5-10 min for DNS to propagate, then verify:
 ```bash
