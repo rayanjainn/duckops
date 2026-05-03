@@ -63,7 +63,7 @@
           rules:
           - host: >-
               {% if is_cloud | default(false) | bool -%}
-              {{ project_name }}-{{ github_username | default('duckops') }}-duckops.{{ platform_domain | default('raycode.tech') }}
+              {{ project_name }}-{{ github_username | default('duckops') }}.{{ platform_domain | default('raycode.tech') }}
               {%- else -%}
               {{ project_name }}.localhost
               {%- endif %}
