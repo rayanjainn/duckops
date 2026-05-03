@@ -10,7 +10,7 @@
     }
   },
   "scripts": {
-    "build": "tsc && cp -r src/generated dist/",
+    "build": "prisma generate && tsc && cp -r src/generated dist/",
     "dev": "cp -r src/generated dist/ 2>/dev/null || true && tsc --watch",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
