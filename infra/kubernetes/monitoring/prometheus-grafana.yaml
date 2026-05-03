@@ -19,7 +19,7 @@ data:
       - job_name: 'duckops-services'
         metrics_path: '/api/platform/metrics/prometheus'
         static_configs:
-          - targets: ['13.204.92.146:4004'] # health-service on host
+          - targets: ['10.42.0.1:4004'] # health-service on host
 ---
 apiVersion: apps/v1
 kind: Deployment
