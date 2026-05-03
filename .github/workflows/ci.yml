@@ -9,6 +9,7 @@ on:
 env:
   PNPM_VERSION: "9.15.4"
   NODE_VERSION: "22"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   # ── 1. Type-check on every push/PR ─────────────────────────────────────────
@@ -31,10 +32,7 @@ jobs:
         run: pnpm install --frozen-lockfile --prod=false
 
       - name: Build shared packages
-        run: |
-          pnpm --filter @duckops/db build
-          pnpm --filter @duckops/shared-utils build
-          pnpm --filter @duckops/shared-types build
+        run: pnpm exec turbo run build --filter=@duckops/db --filter=@duckops/shared-utils --filter=@duckops/shared-types
 
       - name: Type check all services
         run: pnpm -r lint
@@ -84,15 +82,8 @@ jobs:
             # Install deps (including devDeps for tsc)
             pnpm install --frozen-lockfile --prod=false
 
-            # Build all services (skips web — Vercel handles that)
-            pnpm --filter @duckops/db build
-            pnpm --filter @duckops/shared-utils build
-            pnpm --filter @duckops/shared-types build
-            pnpm --filter provisioning-service build
-            pnpm --filter pipeline-service build
-            pnpm --filter health-service build
-            pnpm --filter ai-service build
-            pnpm --filter catalog-service build
+            # Build all backend services in parallel using Turborepo (skips web)
+            pnpm exec turbo run build --filter=!web
 
             # Run DB migrations using production DATABASE_URL from .env
             cd packages/db

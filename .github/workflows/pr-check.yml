@@ -7,6 +7,7 @@ on:
 env:
   PNPM_VERSION: "9.15.4"
   NODE_VERSION: "22"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   check:
@@ -28,10 +29,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build shared packages
-        run: |
-          pnpm --filter @duckops/db build
-          pnpm --filter @duckops/shared-utils build
-          pnpm --filter @duckops/shared-types build
+        run: pnpm exec turbo run build --filter=@duckops/db --filter=@duckops/shared-utils --filter=@duckops/shared-types
 
       - name: Type check
         run: pnpm -r lint
