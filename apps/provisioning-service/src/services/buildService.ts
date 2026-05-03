@@ -47,6 +47,11 @@ async function ensureEcrRepo(projectName: string): Promise<void> {
       `aws ecr create-repository --repository-name ${repoName} --region ${AWS_REGION} --image-scanning-configuration scanOnPush=true`,
       { env: subEnv },
     );
+    // Keep only the last 3 images to control ECR storage costs
+    await execAsync(
+      `aws ecr put-lifecycle-policy --repository-name ${repoName} --region ${AWS_REGION} --lifecycle-policy-text '{"rules":[{"rulePriority":1,"description":"Keep last 3 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":3},"action":{"type":"expire"}}]}'`,
+      { env: subEnv },
+    );
     logger.info(`Created ECR repo: ${repoName}`);
   }
 }
