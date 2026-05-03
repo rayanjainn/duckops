@@ -58,7 +58,6 @@ export function startMetricCollection() {
         })),
       });
       
-      // Cleanup: Keep only last 2 hours of metrics (2 hours * 60 min * 6 samples/min = 720 samples per service)
       const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000);
       await prisma.serviceMetric.deleteMany({
         where: { timestamp: { lt: cutoff } }

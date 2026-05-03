@@ -267,5 +267,4 @@ model ServiceMetric {
   timestamp   DateTime @default(now())
 
   @@index([serviceName, timestamp])
-  @@map("ServiceMetric")
 }

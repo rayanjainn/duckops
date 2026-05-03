@@ -94,10 +94,10 @@ jobs:
             pnpm --filter ai-service build
             pnpm --filter catalog-service build
 
-            # Push DB schema changes using production DATABASE_URL from .env
+            # Run DB migrations using production DATABASE_URL from .env
             cd packages/db
-            export DATABASE_URL=$(grep '^DATABASE_URL=' /opt/duckops/.env | sed 's/^DATABASE_URL=//' | sed 's/^"//;s/"$//')
-            DATABASE_URL="$DATABASE_URL" pnpm exec prisma db push --accept-data-loss
+            export DATABASE_URL=$(grep '^DATABASE_URL=' /opt/duckops/.env | cut -d '=' -f2-)
+            DATABASE_URL="$DATABASE_URL" pnpm exec prisma migrate deploy
             cd /opt/duckops
 
             # Reload PM2 with updated env (zero-downtime)
