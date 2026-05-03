@@ -114,7 +114,10 @@ export async function createJenkinsPipeline(
   const { projectName, gitRepoUrl, branch } = config;
   const registry = process.env.REGISTRY_URL || "k3d-duckops-registry:5111";
   const hostRegistry = process.env.HOST_REGISTRY_URL || "localhost:5111";
-  const namespace = `project-${projectName}`;
+  const isCloud = process.env.DEPLOY_MODE === "cloud";
+  const namespace = isCloud
+    ? `${config.githubUsername?.toLowerCase().replace(/[^a-z0-9]/g, "") || "duckops"}-${projectName}`
+    : `project-${projectName}`;
   const installCmd = pmInstallCmd(config.packageManager);
   const runCmd = pmRunCmd(config.packageManager);
 
@@ -123,6 +126,45 @@ export async function createJenkinsPipeline(
   if (config.githubUsername && config.githubAccessToken) {
     await upsertGitHubCredential(credentialId, config.githubUsername, config.githubAccessToken);
   }
+
+  const awsRegion = process.env.AWS_REGION || "ap-south-1";
+  const awsAccountId = process.env.AWS_ACCOUNT_ID || "";
+  const ecrRegistry = `${awsAccountId}.dkr.ecr.${awsRegion}.amazonaws.com`;
+  const ecrImageName = `duckops/${projectName}`;
+  const callbackUrl = `http://localhost:4003`;
+
+  const buildStage = isCloud ? `
+        stage('Build Image') {
+            steps {
+                sh "aws ecr get-login-password --region ${awsRegion} | docker login --username AWS --password-stdin ${ecrRegistry}"
+                sh "docker build -t ${ecrRegistry}/${ecrImageName}:\${BUILD_NUMBER} ."
+                sh "docker tag ${ecrRegistry}/${ecrImageName}:\${BUILD_NUMBER} ${ecrRegistry}/${ecrImageName}:latest"
+            }
+        }
+
+        stage('Push Image') {
+            steps {
+                sh "docker push ${ecrRegistry}/${ecrImageName}:\${BUILD_NUMBER}"
+                sh "docker push ${ecrRegistry}/${ecrImageName}:latest"
+            }
+        }` : `
+        stage('Build Image') {
+            steps {
+                sh "docker build -t \${HOST_REGISTRY}/\${IMAGE_NAME}:\${BUILD_NUMBER} ."
+                sh "docker tag \${HOST_REGISTRY}/\${IMAGE_NAME}:\${BUILD_NUMBER} \${HOST_REGISTRY}/\${IMAGE_NAME}:latest"
+            }
+        }
+
+        stage('Push Image') {
+            steps {
+                sh "docker push \${HOST_REGISTRY}/\${IMAGE_NAME}:\${BUILD_NUMBER}"
+                sh "docker push \${HOST_REGISTRY}/\${IMAGE_NAME}:latest"
+            }
+        }`;
+
+  const deployImage = isCloud
+    ? `${ecrRegistry}/${ecrImageName}:\${BUILD_NUMBER}`
+    : `\${K8S_REGISTRY}/\${IMAGE_NAME}:\${BUILD_NUMBER}`;
 
   const jobConfigXml = `<?xml version='1.1' encoding='UTF-8'?>
 <flow-definition>
@@ -141,14 +183,11 @@ pipeline {
     agent any
 
     environment {
-        K8S_REGISTRY  = '${registry}'
-        HOST_REGISTRY = '${hostRegistry}'
         IMAGE_NAME    = '${projectName}'
         NAMESPACE     = '${namespace}'
-        KUBECONFIG    = '/root/.kube/config'
-        // Persistent pnpm store — populated by the Jenkins container's PNPM_HOME env var.
-        // Packages are reused across builds so pnpm install only fetches what changed.
-        PNPM_HOME     = '/var/jenkins_home/.pnpm-store'
+        KUBECONFIG    = '/etc/rancher/k3s/k3s.yaml'
+        ${isCloud ? "" : `K8S_REGISTRY  = '${registry}'
+        HOST_REGISTRY = '${hostRegistry}'`}
     }
 
     stages {
@@ -169,28 +208,15 @@ pipeline {
                 sh '${runCmd} test || true'
             }
         }
-
-        stage('Build Image') {
-            steps {
-                sh "docker build -t \${HOST_REGISTRY}/\${IMAGE_NAME}:\${BUILD_NUMBER} ."
-                sh "docker tag \${HOST_REGISTRY}/\${IMAGE_NAME}:\${BUILD_NUMBER} \${HOST_REGISTRY}/\${IMAGE_NAME}:latest"
-            }
-        }
-
-        stage('Push Image') {
-            steps {
-                sh "docker push \${HOST_REGISTRY}/\${IMAGE_NAME}:\${BUILD_NUMBER}"
-                sh "docker push \${HOST_REGISTRY}/\${IMAGE_NAME}:latest"
-            }
-        }
+${buildStage}
 
         stage('Deploy') {
             steps {
                 sh """
                     kubectl set image deployment/\${IMAGE_NAME} \\
-                      \${IMAGE_NAME}=\${K8S_REGISTRY}/\${IMAGE_NAME}:\${BUILD_NUMBER} \\
+                      \${IMAGE_NAME}=${deployImage} \\
                       -n \${NAMESPACE} --kubeconfig=\${KUBECONFIG}
-                    kubectl rollout status deployment/\${IMAGE_NAME} -n \${NAMESPACE} --timeout=120s
+                    kubectl rollout status deployment/\${IMAGE_NAME} -n \${NAMESPACE} --timeout=120s --kubeconfig=\${KUBECONFIG}
                 """
             }
         }
@@ -199,18 +225,18 @@ pipeline {
     post {
         success {
             sh """
-                curl -sf -X POST http://duckops-pipeline:4003/api/pipelines/deployments \\
+                curl -sf -X POST ${callbackUrl}/api/pipelines/deployments \\
                   -H 'Content-Type: application/json' \\
-                  -d '{"projectName":"\${IMAGE_NAME}","buildNumber":"\${BUILD_NUMBER}","imageTag":"\${HOST_REGISTRY}/\${IMAGE_NAME}:\${BUILD_NUMBER}","status":"SUCCESS"}' \\
+                  -d '{"projectName":"\${IMAGE_NAME}","buildNumber":"\${BUILD_NUMBER}","imageTag":"${isCloud ? `${ecrRegistry}/${ecrImageName}:\${BUILD_NUMBER}` : `\${HOST_REGISTRY}/\${IMAGE_NAME}:\${BUILD_NUMBER}`}","status":"SUCCESS"}' \\
                   || true
             """
             echo 'Deployment successful!'
         }
         failure {
             sh """
-                curl -sf -X POST http://duckops-pipeline:4003/api/pipelines/deployments \\
+                curl -sf -X POST ${callbackUrl}/api/pipelines/deployments \\
                   -H 'Content-Type: application/json' \\
-                  -d '{"projectName":"\${IMAGE_NAME}","buildNumber":"\${BUILD_NUMBER}","imageTag":"\${HOST_REGISTRY}/\${IMAGE_NAME}:\${BUILD_NUMBER}","status":"FAILED"}' \\
+                  -d '{"projectName":"\${IMAGE_NAME}","buildNumber":"\${BUILD_NUMBER}","imageTag":"${isCloud ? `${ecrRegistry}/${ecrImageName}:\${BUILD_NUMBER}` : `\${HOST_REGISTRY}/\${IMAGE_NAME}:\${BUILD_NUMBER}`}","status":"FAILED"}' \\
                   || true
             """
             echo 'Deployment failed!'

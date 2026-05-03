@@ -11,6 +11,10 @@ const logger = createLogger("ansible-service");
 export interface AnsibleInput {
   projectName: string;
   namespace: string;
+  databaseUrl?: string;
+  isCloud?: boolean;
+  githubUsername?: string;
+  platformDomain?: string;
 }
 
 const REPO_ROOT = path.resolve(__dirname, "../../../..");
@@ -55,6 +59,20 @@ export async function runAnsible(input: AnsibleInput): Promise<void> {
   const safeName = projectName.replace(/[^a-z0-9-]/g, "");
   const safeNamespace = namespace.replace(/[^a-z0-9-]/g, "");
 
+  // Get ECR token if in cloud mode
+  let ecrToken = "";
+  const isCloud = input.isCloud ?? process.env.DEPLOY_MODE === "cloud";
+  const registry = `${process.env.AWS_ACCOUNT_ID}.dkr.ecr.${process.env.AWS_REGION || "ap-south-1"}.amazonaws.com`;
+
+  if (isCloud) {
+    try {
+      const { stdout: token } = await execAsync(`aws ecr get-login-password --region ${process.env.AWS_REGION || "ap-south-1"}`, { env: subEnv });
+      ecrToken = token.trim();
+    } catch (e: any) {
+      logger.warn(`Failed to get ECR token for Ansible: ${e.message}`);
+    }
+  }
+
   // Pass extra-vars via a temp file using @<file> syntax to avoid shell injection.
   const tmpVars = path.join(os.tmpdir(), `duckops-ansible-${safeName}-${Date.now()}.json`);
   await fs.writeFile(
@@ -62,7 +80,12 @@ export async function runAnsible(input: AnsibleInput): Promise<void> {
     JSON.stringify({
       project_name: safeName,
       k8s_namespace: safeNamespace,
-      database_url: `postgresql://duckops:duckops123@postgres.${safeNamespace}.svc.cluster.local:5432/${safeName}`,
+      database_url: input.databaseUrl || `postgresql://duckops:duckops123@postgres.${safeNamespace}.svc.cluster.local:5432/${safeName}`,
+      is_cloud: isCloud,
+      ecr_registry: registry,
+      ecr_token: ecrToken,
+      github_username: input.githubUsername || "duckops",
+      platform_domain: input.platformDomain || process.env.DOMAIN || "yourdomain.tech",
     }),
     { mode: 0o600 },
   );

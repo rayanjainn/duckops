@@ -165,6 +165,10 @@ export async function provisionProject(
   await runAnsible({
     projectName: input.name,
     namespace: terraformResult.namespace,
+    databaseUrl: IS_CLOUD ? process.env.DATABASE_URL : undefined,
+    isCloud: IS_CLOUD,
+    githubUsername: input.githubUsername,
+    platformDomain: DOMAIN,
   });
 
   emitStatus(projectId, ProjectStatus.CONFIGURING, "Pod rolled out", "kubectl rollout status");
@@ -175,14 +179,14 @@ export async function provisionProject(
   // URL format: local = "http://{name}.localhost:8080"
   //             cloud = "https://{name}-{github}-duckops.{DOMAIN}"
   const liveUrl = IS_CLOUD
-    ? `https://${input.name}-${input.githubUsername.toLowerCase()}-duckops.${DOMAIN}`
+    ? `https://${input.name}-${input.githubUsername.toLowerCase()}.${DOMAIN}`
     : isTurbo
       ? `http://${input.name}-api.localhost:8080`
       : `http://${input.name}.localhost:8080`;
 
   const webUrl = isTurbo
     ? IS_CLOUD
-      ? `https://${input.name}-web-${input.githubUsername.toLowerCase()}-duckops.${DOMAIN}`
+      ? `https://${input.name}-web-${input.githubUsername.toLowerCase()}.${DOMAIN}`
       : `http://${input.name}-web.localhost:8080`
     : null;
 

@@ -524,6 +524,7 @@ pm2 reload ecosystem.config.js --update-env
 | Redis not responding | `systemctl status redis-server` → `systemctl restart redis-server` |
 | Health checks failing | `kubectl exec -n <ns> deploy/<name> -- wget -qO- http://localhost:<port>/health` |
 | Linux user not created | Check SSH key: `EC2_SSH_KEY_PATH` in `.env` must be readable by provisioning-service |
+| Jenkins 401 after token rotation | Update `JENKINS_TOKEN` in `/opt/duckops/.env` then run: `set -a && source /opt/duckops/.env && set +a && pm2 reload ecosystem.config.js --update-env` |
 
 ---
 

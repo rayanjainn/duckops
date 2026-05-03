@@ -18,6 +18,26 @@
         kubectl create namespace {{ k8s_namespace }}
       changed_when: true
 
+    - name: Create Image Pull Secret (ECR)
+      shell: |
+        kubectl create secret docker-registry regcred \
+          --docker-server={{ ecr_registry }} \
+          --docker-username=AWS \
+          --docker-password={{ ecr_token }} \
+          --namespace {{ k8s_namespace }} \
+          --dry-run=client -o yaml | kubectl apply -f -
+      when: is_cloud | default(false) | bool
+      ignore_errors: true
+
+    - name: Create ConfigMap for project
+      shell: |
+        kubectl create configmap {{ project_name }}-config \
+          --from-literal=DATABASE_URL={{ database_url }} \
+          --from-literal=NODE_ENV=production \
+          --namespace {{ k8s_namespace }} \
+          --dry-run=client -o yaml | kubectl apply -f -
+      ignore_errors: true
+
     - name: Apply Kubernetes deployment manifest
       shell: |
         kubectl apply -f /tmp/duckops-projects/{{ project_name }}/k8s/deployment.yaml
@@ -28,7 +48,7 @@
         kubectl apply -f /tmp/duckops-projects/{{ project_name }}/k8s/service.yaml
       ignore_errors: true
 
-    - name: Apply ingress for project
+    - name: Apply dynamic Ingress for project
       shell: |
         cat <<EOF | kubectl apply -f -
         apiVersion: networking.k8s.io/v1
@@ -37,10 +57,15 @@
           name: {{ project_name }}
           namespace: {{ k8s_namespace }}
           annotations:
-            nginx.ingress.kubernetes.io/rewrite-target: /
+            traefik.ingress.kubernetes.io/router.entrypoints: web
         spec:
           rules:
-          - host: {{ project_name }}.localhost
+          - host: >-
+              {% if is_cloud | default(false) | bool -%}
+              {{ project_name }}-{{ github_username | default('duckops') }}-duckops.{{ platform_domain | default('raycode.tech') }}
+              {%- else -%}
+              {{ project_name }}.localhost
+              {%- endif %}
             http:
               paths:
               - path: /

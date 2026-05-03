@@ -15,6 +15,8 @@ spec:
       labels:
         app: {{projectName}}
     spec:
+      imagePullSecrets:
+        - name: regcred
       containers:
         - name: {{projectName}}
           image: {{registry}}/{{projectName}}:latest

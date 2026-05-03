@@ -31,6 +31,7 @@ import {
   FileCode,
   ScrollText,
   Plus,
+  Play,
 } from "lucide-react";
 import { useProject, useRetryProject } from "@/hooks/useProjects";
 import { useRealTimeStatus } from "@/hooks/useRealTimeStatus";
@@ -1383,6 +1384,7 @@ export default function ProjectDetailPage({
   const { id } = use(params);
   const { data: project, isLoading, refetch } = useProject(id);
   const { mutate: retry, isPending: isRetrying } = useRetryProject();
+  const [isBuildTriggering, setIsBuildTriggering] = useState(false);
   const { status: liveStatus, subStep: liveSubStep } = useRealTimeStatus(id);
   const { data: liveBuild } = useLiveBuild(id);
   const updateLiveStatus = useProjectStore((s) => s.updateLiveStatus);
@@ -1463,6 +1465,31 @@ export default function ProjectDetailPage({
         }
         actions={
           <div className="flex items-center gap-2">
+            {project?.pipeline && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  if (!project.pipeline) return;
+                  setIsBuildTriggering(true);
+                  try {
+                    await pipelineApi.triggerBuild(project.pipeline.id);
+                    setTimeout(() => refetch(), 2000);
+                  } catch (e) {
+                    console.error(e);
+                  } finally {
+                    setIsBuildTriggering(false);
+                  }
+                }}
+                disabled={isBuildTriggering || liveBuild?.building}
+              >
+                {isBuildTriggering
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <Play className="h-3.5 w-3.5" />
+                }
+                {isBuildTriggering ? "Triggering..." : "Run Build"}
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"

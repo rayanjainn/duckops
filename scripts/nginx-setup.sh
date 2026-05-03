@@ -33,6 +33,8 @@ server {
 
     client_max_body_size 50m;
 
+    location /health { proxy_pass http://localhost:4002; include /etc/nginx/proxy_params; }
+
     location /api/auth      { proxy_pass http://localhost:4002; include /etc/nginx/proxy_params; }
     location /api/projects  { proxy_pass http://localhost:4002; include /etc/nginx/proxy_params; }
     location /api/billing   { proxy_pass http://localhost:4002; include /etc/nginx/proxy_params; }
@@ -63,7 +65,6 @@ server {
     # Socket.IO real-time updates
     location /socket.io/ {
         proxy_pass http://localhost:4002;
-        proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
         include /etc/nginx/proxy_params;
