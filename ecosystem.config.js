@@ -26,7 +26,10 @@ const env = {
   AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
   AWS_REGION: process.env.AWS_REGION || "ap-south-1",
   DEPLOY_MODE: process.env.DEPLOY_MODE || "cloud",
-  DOMAIN: process.env.DOMAIN,
+  INTERNAL_API_SECRET: process.env.INTERNAL_API_SECRET,
+  JENKINS_CALLBACK_SECRET: process.env.JENKINS_CALLBACK_SECRET,
+  CORS_ORIGINS: process.env.CORS_ORIGINS,
+  AI_SERVICE_URL: process.env.AI_SERVICE_URL || "http://localhost:4005",
 };
 
 module.exports = {
