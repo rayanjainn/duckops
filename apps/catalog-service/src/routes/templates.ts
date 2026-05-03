@@ -4,11 +4,14 @@ import { z } from "zod";
 import { validate } from "../middleware/validate";
 import { requireAuth } from "../middleware/auth";
 import { NotFoundError } from "@duckops/shared-utils";
+import rateLimit from "express-rate-limit";
+
+const publicRateLimit = rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false });
 
 export const templateRouter = Router();
 
 // GET /api/templates — all options grouped by layer
-templateRouter.get("/", async (req, res, next) => {
+templateRouter.get("/", publicRateLimit, async (req, res, next) => {
   try {
     const options = await prisma.templateOption.findMany({
       where: { isActive: true },
@@ -32,7 +35,7 @@ templateRouter.get("/", async (req, res, next) => {
 });
 
 // GET /api/templates/compatible — filter by current selections
-templateRouter.get("/compatible", async (req, res, next) => {
+templateRouter.get("/compatible", publicRateLimit, async (req, res, next) => {
   try {
     const { language, framework, database, orm } = req.query as Record<
       string,
@@ -71,7 +74,7 @@ templateRouter.get("/compatible", async (req, res, next) => {
 });
 
 // GET /api/templates/:layer — options for a specific layer
-templateRouter.get("/:layer", async (req, res, next) => {
+templateRouter.get("/:layer", publicRateLimit, async (req, res, next) => {
   try {
     const layer = (req.params.layer as string).toUpperCase();
     const validLayers = ["LANGUAGE", "FRAMEWORK", "DATABASE", "ORM"];

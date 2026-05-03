@@ -77,16 +77,16 @@ export async function runTerraform(input: TerraformInput): Promise<TerraformResu
     await run(`"${TERRAFORM_BIN}" init -input=false`, tfVars);
 
     try {
-      await run(`"${TERRAFORM_BIN}" workspace new ${projectName}`, tfVars);
+      await run(`"${TERRAFORM_BIN}" workspace new "${projectName}"`, tfVars);
     } catch {
-      await run(`"${TERRAFORM_BIN}" workspace select ${projectName}`, tfVars);
+      await run(`"${TERRAFORM_BIN}" workspace select "${projectName}"`, tfVars);
     }
 
     logger.info("Running terraform plan...");
-    await run(`"${TERRAFORM_BIN}" plan -input=false -out=tfplan-${projectName}`, tfVars);
+    await run(`"${TERRAFORM_BIN}" plan -input=false -out="tfplan-${projectName}"`, tfVars);
 
     logger.info("Running terraform apply...");
-    await run(`"${TERRAFORM_BIN}" apply -input=false -auto-approve tfplan-${projectName}`, tfVars);
+    await run(`"${TERRAFORM_BIN}" apply -input=false -auto-approve "tfplan-${projectName}"`, tfVars);
 
     const { stdout } = await run(`"${TERRAFORM_BIN}" output -json`, tfVars);
 
@@ -121,10 +121,10 @@ export async function destroyTerraform(projectName: string): Promise<void> {
   };
 
   try {
-    await run(`"${TERRAFORM_BIN}" workspace select ${projectName}`, tfVars);
+    await run(`"${TERRAFORM_BIN}" workspace select "${projectName}"`, tfVars);
     await run(`"${TERRAFORM_BIN}" destroy -input=false -auto-approve`, tfVars);
     await run(`"${TERRAFORM_BIN}" workspace select default`, tfVars);
-    await run(`"${TERRAFORM_BIN}" workspace delete ${projectName}`, tfVars);
+    await run(`"${TERRAFORM_BIN}" workspace delete "${projectName}"`, tfVars);
     logger.info(`Terraform resources destroyed for: ${projectName}`);
   } catch (error: any) {
     logger.error(`Terraform destroy failed for ${projectName}: ${error.message}`);

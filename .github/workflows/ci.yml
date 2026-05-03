@@ -37,11 +37,63 @@ jobs:
       - name: Type check all services
         run: pnpm -r lint
 
-  # ── 2. Deploy backend to EC2 on push to main ───────────────────────────────
+  # ── 2. Run tests across all packages ──────────────────────────────────────
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Run tests
+        run: pnpm exec turbo run test --continue
+
+  # ── 3. Validate Terraform and Ansible ─────────────────────────────────────
+  validate-infra:
+    name: Validate Infra
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.0"
+
+      - name: Terraform Init
+        run: terraform init -backend=false
+        working-directory: infra/terraform
+
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: infra/terraform
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+        working-directory: infra/terraform
+
+      - name: Install ansible-lint
+        run: pip install ansible-lint
+
+      - name: Ansible Lint
+        run: ansible-lint infra/ansible/playbooks/
+        continue-on-error: true
+
+  # ── 4. Deploy backend to EC2 on push to main ───────────────────────────────
   deploy-backend:
     name: Deploy Backend to EC2
     runs-on: ubuntu-latest
-    needs: lint-and-typecheck
+    needs: [lint-and-typecheck, test, validate-infra]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment: production
 
@@ -104,7 +156,7 @@ jobs:
   deploy-frontend:
     name: Deploy Frontend (Vercel)
     runs-on: ubuntu-latest
-    needs: lint-and-typecheck
+    needs: [lint-and-typecheck, test, validate-infra]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:

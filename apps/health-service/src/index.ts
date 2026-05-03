@@ -17,9 +17,14 @@ const logger = createLogger("health-service");
 const app = express();
 const httpServer = createServer(app);
 
-export const io = new SocketServer(httpServer, { cors: { origin: "*" } });
+const corsOrigins = (process.env.CORS_ORIGINS || "https://app.raycode.tech,https://raycode.tech,http://localhost:3000").split(",");
 
-app.use(cors());
+export const io = new SocketServer(httpServer, { cors: { origin: corsOrigins, credentials: true } });
+
+app.use(cors({
+  origin: corsOrigins,
+  credentials: true,
+}));
 app.use(helmet());
 app.use(httpLogger("health-service"));
 app.use(express.json());

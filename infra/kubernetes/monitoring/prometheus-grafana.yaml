@@ -62,7 +62,6 @@ spec:
     - port: 9090
       targetPort: 9090
 ---
----
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -104,71 +103,414 @@ data:
     {
       "title": "DuckOps Services",
       "uid": "duckops-services",
+      "schemaVersion": 36,
+      "version": 1,
       "refresh": "30s",
+      "timezone": "browser",
       "time": {"from": "now-1h", "to": "now"},
+      "templating": {
+        "list": [
+          {
+            "name": "datasource",
+            "type": "datasource",
+            "pluginId": "prometheus",
+            "current": {"text": "Prometheus", "value": "Prometheus"},
+            "hide": 0,
+            "includeAll": false,
+            "multi": false,
+            "label": "Datasource"
+          },
+          {
+            "name": "service",
+            "type": "query",
+            "datasource": {"type": "prometheus", "uid": "${datasource}"},
+            "query": "label_values(duckops_service_cpu_percent, service)",
+            "current": {"text": "All", "value": "$__all"},
+            "hide": 0,
+            "includeAll": true,
+            "multi": true,
+            "allValue": ".*",
+            "label": "Service",
+            "refresh": 2,
+            "sort": 1
+          }
+        ]
+      },
       "panels": [
         {
-          "id": 1, "type": "timeseries", "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
-          "title": "CPU Usage %",
-          "targets": [{"datasource": "Prometheus", "expr": "duckops_service_cpu{}", "legendFormat": "{{service}}"}]
+          "id": 1,
+          "type": "stat",
+          "title": "Total CPU %",
+          "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {
+              "datasource": {"type": "prometheus", "uid": "${datasource}"},
+              "expr": "sum(duckops_service_cpu_percent)",
+              "legendFormat": "Total CPU %",
+              "refId": "A",
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {"color": "green", "value": null},
+                  {"color": "yellow", "value": 70},
+                  {"color": "red", "value": 90}
+                ]
+              },
+              "color": {"mode": "thresholds"}
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {"calcs": ["lastNotNull"]},
+            "orientation": "auto",
+            "colorMode": "background",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "textMode": "auto"
+          }
         },
         {
-          "id": 2, "type": "timeseries", "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
-          "title": "Memory Usage MB",
-          "targets": [{"datasource": "Prometheus", "expr": "duckops_service_memory_mb{}", "legendFormat": "{{service}}"}]
+          "id": 2,
+          "type": "stat",
+          "title": "Total Memory MB",
+          "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {
+              "datasource": {"type": "prometheus", "uid": "${datasource}"},
+              "expr": "sum(duckops_service_memory_bytes) / 1048576",
+              "legendFormat": "Total Memory MB",
+              "refId": "A",
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "MB",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {"color": "green", "value": null},
+                  {"color": "yellow", "value": 512},
+                  {"color": "red", "value": 1024}
+                ]
+              },
+              "color": {"mode": "thresholds"}
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {"calcs": ["lastNotNull"]},
+            "orientation": "auto",
+            "colorMode": "background",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "textMode": "auto"
+          }
         },
         {
-          "id": 3, "type": "stat", "gridPos": {"x": 0, "y": 8, "w": 6, "h": 4},
+          "id": 3,
+          "type": "stat",
           "title": "Services Online",
-          "targets": [{"datasource": "Prometheus", "expr": "count(duckops_service_uptime_seconds > 0)"}],
-          "options": {"colorMode": "background", "thresholds": {"steps": [{"value": 0, "color": "red"}, {"value": 5, "color": "green"}]}}
+          "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {
+              "datasource": {"type": "prometheus", "uid": "${datasource}"},
+              "expr": "sum(duckops_service_status)",
+              "legendFormat": "Online",
+              "refId": "A",
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {"color": "red", "value": null},
+                  {"color": "yellow", "value": 1},
+                  {"color": "green", "value": 5}
+                ]
+              },
+              "color": {"mode": "thresholds"},
+              "mappings": [
+                {"type": "value", "options": {"5": {"text": "5 / 5", "color": "green", "index": 0}}}
+              ]
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {"calcs": ["lastNotNull"]},
+            "orientation": "auto",
+            "colorMode": "background",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "textMode": "auto"
+          }
         },
         {
-          "id": 4, "type": "table", "gridPos": {"x": 6, "y": 8, "w": 18, "h": 4},
-          "title": "Service Uptime",
-          "targets": [{"datasource": "Prometheus", "expr": "duckops_service_uptime_seconds{}", "legendFormat": "{{service}}", "instant": true}]
+          "id": 4,
+          "type": "stat",
+          "title": "Total Restarts",
+          "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {
+              "datasource": {"type": "prometheus", "uid": "${datasource}"},
+              "expr": "sum(duckops_service_restarts_total)",
+              "legendFormat": "Total Restarts",
+              "refId": "A",
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {"color": "green", "value": null},
+                  {"color": "yellow", "value": 5},
+                  {"color": "red", "value": 20}
+                ]
+              },
+              "color": {"mode": "thresholds"}
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {"calcs": ["lastNotNull"]},
+            "orientation": "auto",
+            "colorMode": "background",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "textMode": "auto"
+          }
         },
         {
-          "id": 5, "type": "timeseries", "gridPos": {"x": 0, "y": 12, "w": 24, "h": 8},
-          "title": "HTTP Requests / 5m",
-          "targets": [{"datasource": "Prometheus", "expr": "rate(duckops_http_requests_total{}[5m])", "legendFormat": "{{service}} {{method}} {{route}}"}]
+          "id": 5,
+          "type": "timeseries",
+          "title": "CPU % per Service",
+          "gridPos": {"x": 0, "y": 4, "w": 24, "h": 8},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {
+              "datasource": {"type": "prometheus", "uid": "${datasource}"},
+              "expr": "duckops_service_cpu_percent{service=~\"$service\"}",
+              "legendFormat": "{{service}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "showPoints": "auto",
+                "pointSize": 5
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{"color": "green", "value": null}]
+              },
+              "color": {"mode": "palette-classic"}
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {"mode": "multi", "sort": "desc"},
+            "legend": {"displayMode": "list", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"]}
+          }
         },
         {
-          "id": 6, "type": "timeseries", "gridPos": {"x": 0, "y": 20, "w": 24, "h": 8},
-          "title": "Error Rate / 5m",
-          "targets": [{"datasource": "Prometheus", "expr": "rate(duckops_http_errors_total{}[5m])", "legendFormat": "{{service}} {{status}}"}],
-          "fieldConfig": {"defaults": {"color": {"fixedColor": "red", "mode": "fixed"}}}
-        }
-      ]
-    }
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: grafana-dashboard-k8s
-  namespace: monitoring
-data:
-  k8s.json: |
-    {
-      "title": "DuckOps Kubernetes",
-      "uid": "duckops-k8s",
-      "refresh": "30s",
-      "time": {"from": "now-1h", "to": "now"},
-      "panels": [
-        {
-          "id": 1, "type": "table", "gridPos": {"x": 0, "y": 0, "w": 24, "h": 10},
-          "title": "Pod Status",
-          "targets": [{"datasource": "Prometheus", "expr": "kube_pod_status_phase{}", "legendFormat": "{{pod}} - {{phase}}", "instant": true}]
+          "id": 6,
+          "type": "timeseries",
+          "title": "Memory MB per Service",
+          "gridPos": {"x": 0, "y": 12, "w": 24, "h": 8},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {
+              "datasource": {"type": "prometheus", "uid": "${datasource}"},
+              "expr": "duckops_service_memory_bytes{service=~\"$service\"} / 1048576",
+              "legendFormat": "{{service}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "MB",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "showPoints": "auto",
+                "pointSize": 5
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{"color": "green", "value": null}]
+              },
+              "color": {"mode": "palette-classic"}
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {"mode": "multi", "sort": "desc"},
+            "legend": {"displayMode": "list", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"]}
+          }
         },
         {
-          "id": 2, "type": "timeseries", "gridPos": {"x": 0, "y": 10, "w": 12, "h": 8},
-          "title": "Pod Restarts",
-          "targets": [{"datasource": "Prometheus", "expr": "kube_pod_container_status_restarts_total{}", "legendFormat": "{{pod}}"}]
+          "id": 7,
+          "type": "bargauge",
+          "title": "Restart Count",
+          "gridPos": {"x": 0, "y": 20, "w": 12, "h": 8},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {
+              "datasource": {"type": "prometheus", "uid": "${datasource}"},
+              "expr": "duckops_service_restarts_total",
+              "legendFormat": "{{service}}",
+              "refId": "A",
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {"color": "green", "value": null},
+                  {"color": "yellow", "value": 3},
+                  {"color": "red", "value": 10}
+                ]
+              },
+              "color": {"mode": "thresholds"},
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {"calcs": ["lastNotNull"]},
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "showUnfilled": true,
+            "valueMode": "color"
+          }
         },
         {
-          "id": 3, "type": "stat", "gridPos": {"x": 12, "y": 10, "w": 12, "h": 8},
-          "title": "Running Pods",
-          "targets": [{"datasource": "Prometheus", "expr": "count(kube_pod_status_phase{phase=\"Running\"})"}]
+          "id": 8,
+          "type": "table",
+          "title": "Service Status",
+          "gridPos": {"x": 12, "y": 20, "w": 12, "h": 8},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {
+              "datasource": {"type": "prometheus", "uid": "${datasource}"},
+              "expr": "duckops_service_status",
+              "legendFormat": "{{service}}",
+              "refId": "A",
+              "instant": true,
+              "format": "table"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {"type": "color-background"},
+                "inspect": false
+              },
+              "mappings": [
+                {
+                  "type": "value",
+                  "options": {
+                    "1": {"text": "Online", "color": "green", "index": 0},
+                    "0": {"text": "Offline", "color": "red", "index": 1}
+                  }
+                }
+              ],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {"color": "red", "value": null},
+                  {"color": "green", "value": 1}
+                ]
+              },
+              "color": {"mode": "thresholds"}
+            },
+            "overrides": [
+              {
+                "matcher": {"id": "byName", "options": "Value"},
+                "properties": [
+                  {"id": "custom.cellOptions", "value": {"type": "color-background"}},
+                  {"id": "displayName", "value": "Status"}
+                ]
+              },
+              {
+                "matcher": {"id": "byName", "options": "service"},
+                "properties": [
+                  {"id": "displayName", "value": "Service"}
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {"show": false, "reducer": ["sum"], "enablePagination": false}
+          },
+          "transformations": [
+            {"id": "organize", "options": {"excludeByName": {"Time": true, "__name__": true, "instance": true, "job": true}, "renameByName": {}}}
+          ]
+        },
+        {
+          "id": 9,
+          "type": "timeseries",
+          "title": "HTTP Request Rate /5m",
+          "gridPos": {"x": 0, "y": 28, "w": 24, "h": 8},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {
+              "datasource": {"type": "prometheus", "uid": "${datasource}"},
+              "expr": "rate(duckops_http_requests_total[5m])",
+              "legendFormat": "{{service}} {{method}} {{route}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "showPoints": "auto",
+                "pointSize": 5
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{"color": "green", "value": null}]
+              },
+              "color": {"mode": "palette-classic"}
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {"mode": "multi", "sort": "desc"},
+            "legend": {"displayMode": "list", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"]}
+          }
         }
       ]
     }
@@ -183,47 +525,573 @@ data:
     {
       "title": "DuckOps Business Metrics",
       "uid": "duckops-business",
+      "schemaVersion": 36,
+      "version": 1,
       "refresh": "5m",
+      "timezone": "browser",
       "time": {"from": "now-24h", "to": "now"},
+      "templating": {
+        "list": [
+          {
+            "name": "datasource",
+            "type": "datasource",
+            "pluginId": "prometheus",
+            "current": {"text": "Prometheus", "value": "Prometheus"},
+            "hide": 0,
+            "includeAll": false,
+            "multi": false,
+            "label": "Datasource"
+          }
+        ]
+      },
       "panels": [
         {
-          "id": 1, "type": "stat", "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+          "id": 1,
+          "type": "stat",
           "title": "Total Projects",
-          "targets": [{"datasource": "Prometheus", "expr": "duckops_projects_total"}],
-          "options": {"colorMode": "background"}
+          "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {
+              "datasource": {"type": "prometheus", "uid": "${datasource}"},
+              "expr": "duckops_projects_total",
+              "legendFormat": "Projects",
+              "refId": "A",
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{"color": "blue", "value": null}]
+              },
+              "color": {"mode": "fixed", "fixedColor": "blue"}
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {"calcs": ["lastNotNull"]},
+            "orientation": "auto",
+            "colorMode": "background",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "textMode": "auto"
+          }
         },
         {
-          "id": 2, "type": "stat", "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+          "id": 2,
+          "type": "stat",
           "title": "Total Users",
-          "targets": [{"datasource": "Prometheus", "expr": "duckops_users_total"}],
-          "options": {"colorMode": "background"}
+          "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {
+              "datasource": {"type": "prometheus", "uid": "${datasource}"},
+              "expr": "duckops_users_total",
+              "legendFormat": "Users",
+              "refId": "A",
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{"color": "purple", "value": null}]
+              },
+              "color": {"mode": "fixed", "fixedColor": "purple"}
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {"calcs": ["lastNotNull"]},
+            "orientation": "auto",
+            "colorMode": "background",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "textMode": "auto"
+          }
         },
         {
-          "id": 3, "type": "stat", "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
-          "title": "Deployments Today",
-          "targets": [{"datasource": "Prometheus", "expr": "duckops_deployments_today"}],
-          "options": {"colorMode": "background"}
+          "id": 3,
+          "type": "stat",
+          "title": "Deployments (24h)",
+          "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {
+              "datasource": {"type": "prometheus", "uid": "${datasource}"},
+              "expr": "duckops_deployments_today",
+              "legendFormat": "Deployments",
+              "refId": "A",
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {"color": "grey", "value": null},
+                  {"color": "green", "value": 1}
+                ]
+              },
+              "color": {"mode": "thresholds"}
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {"calcs": ["lastNotNull"]},
+            "orientation": "auto",
+            "colorMode": "background",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "textMode": "auto"
+          }
         },
         {
-          "id": 4, "type": "stat", "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
-          "title": "AI Prompts Today",
-          "targets": [{"datasource": "Prometheus", "expr": "duckops_ai_prompts_today"}],
-          "options": {"colorMode": "background"}
+          "id": 4,
+          "type": "stat",
+          "title": "AI Prompts (24h)",
+          "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {
+              "datasource": {"type": "prometheus", "uid": "${datasource}"},
+              "expr": "duckops_ai_prompts_today",
+              "legendFormat": "AI Prompts",
+              "refId": "A",
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{"color": "orange", "value": null}]
+              },
+              "color": {"mode": "fixed", "fixedColor": "orange"}
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {"calcs": ["lastNotNull"]},
+            "orientation": "auto",
+            "colorMode": "background",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "textMode": "auto"
+          }
         },
         {
-          "id": 5, "type": "timeseries", "gridPos": {"x": 0, "y": 4, "w": 24, "h": 8},
-          "title": "Projects Created Over Time",
-          "targets": [{"datasource": "Prometheus", "expr": "duckops_projects_total", "legendFormat": "Projects"}]
+          "id": 5,
+          "type": "timeseries",
+          "title": "Projects Over Time",
+          "gridPos": {"x": 0, "y": 4, "w": 24, "h": 8},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {
+              "datasource": {"type": "prometheus", "uid": "${datasource}"},
+              "expr": "duckops_projects_total",
+              "legendFormat": "Total Projects",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 20,
+                "gradientMode": "opacity",
+                "spanNulls": false,
+                "showPoints": "auto",
+                "pointSize": 5
+              },
+              "color": {"mode": "fixed", "fixedColor": "blue"},
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{"color": "green", "value": null}]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {"mode": "single", "sort": "none"},
+            "legend": {"displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"]}
+          }
         },
         {
-          "id": 6, "type": "piechart", "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+          "id": 6,
+          "type": "piechart",
           "title": "Projects by Framework",
-          "targets": [{"datasource": "Prometheus", "expr": "duckops_projects_by_framework{}", "legendFormat": "{{framework}}", "instant": true}]
+          "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {
+              "datasource": {"type": "prometheus", "uid": "${datasource}"},
+              "expr": "duckops_projects_by_framework",
+              "legendFormat": "{{framework}}",
+              "refId": "A",
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "color": {"mode": "palette-classic"},
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{"color": "green", "value": null}]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {"calcs": ["lastNotNull"]},
+            "pieType": "pie",
+            "tooltip": {"mode": "single", "sort": "none"},
+            "legend": {"displayMode": "list", "placement": "right", "values": ["percent", "value"]}
+          }
         },
         {
-          "id": 7, "type": "piechart", "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8},
+          "id": 7,
+          "type": "piechart",
           "title": "Deployments by Status",
-          "targets": [{"datasource": "Prometheus", "expr": "duckops_deployments_by_status{}", "legendFormat": "{{status}}", "instant": true}]
+          "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {
+              "datasource": {"type": "prometheus", "uid": "${datasource}"},
+              "expr": "duckops_deployments_by_status",
+              "legendFormat": "{{status}}",
+              "refId": "A",
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "color": {"mode": "palette-classic"},
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{"color": "green", "value": null}]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {"id": "byName", "options": "SUCCESS"},
+                "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]
+              },
+              {
+                "matcher": {"id": "byName", "options": "FAILED"},
+                "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]
+              },
+              {
+                "matcher": {"id": "byName", "options": "PENDING"},
+                "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "yellow"}}]
+              }
+            ]
+          },
+          "options": {
+            "reduceOptions": {"calcs": ["lastNotNull"]},
+            "pieType": "pie",
+            "tooltip": {"mode": "single", "sort": "none"},
+            "legend": {"displayMode": "list", "placement": "right", "values": ["percent", "value"]}
+          }
+        }
+      ]
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-k8s
+  namespace: monitoring
+data:
+  k8s.json: |
+    {
+      "title": "DuckOps Kubernetes",
+      "uid": "duckops-k8s",
+      "schemaVersion": 36,
+      "version": 1,
+      "refresh": "30s",
+      "timezone": "browser",
+      "time": {"from": "now-1h", "to": "now"},
+      "templating": {
+        "list": [
+          {
+            "name": "datasource",
+            "type": "datasource",
+            "pluginId": "prometheus",
+            "current": {"text": "Prometheus", "value": "Prometheus"},
+            "hide": 0,
+            "includeAll": false,
+            "multi": false,
+            "label": "Datasource"
+          }
+        ]
+      },
+      "panels": [
+        {
+          "id": 1,
+          "type": "stat",
+          "title": "Running Pods",
+          "gridPos": {"x": 0, "y": 0, "w": 8, "h": 4},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {
+              "datasource": {"type": "prometheus", "uid": "${datasource}"},
+              "expr": "count(kube_pod_status_phase{phase=\"Running\"})",
+              "legendFormat": "Running",
+              "refId": "A",
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {"color": "red", "value": null},
+                  {"color": "yellow", "value": 1},
+                  {"color": "green", "value": 5}
+                ]
+              },
+              "color": {"mode": "thresholds"}
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {"calcs": ["lastNotNull"]},
+            "orientation": "auto",
+            "colorMode": "background",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "Failed Pods",
+          "gridPos": {"x": 8, "y": 0, "w": 8, "h": 4},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {
+              "datasource": {"type": "prometheus", "uid": "${datasource}"},
+              "expr": "count(kube_pod_status_phase{phase=\"Failed\"}) or vector(0)",
+              "legendFormat": "Failed",
+              "refId": "A",
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {"color": "green", "value": null},
+                  {"color": "red", "value": 1}
+                ]
+              },
+              "color": {"mode": "thresholds"}
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {"calcs": ["lastNotNull"]},
+            "orientation": "auto",
+            "colorMode": "background",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "Pending Pods",
+          "gridPos": {"x": 16, "y": 0, "w": 8, "h": 4},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {
+              "datasource": {"type": "prometheus", "uid": "${datasource}"},
+              "expr": "count(kube_pod_status_phase{phase=\"Pending\"}) or vector(0)",
+              "legendFormat": "Pending",
+              "refId": "A",
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {"color": "green", "value": null},
+                  {"color": "yellow", "value": 1}
+                ]
+              },
+              "color": {"mode": "thresholds"}
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {"calcs": ["lastNotNull"]},
+            "orientation": "auto",
+            "colorMode": "background",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "textMode": "auto"
+          }
+        },
+        {
+          "id": 4,
+          "type": "timeseries",
+          "title": "Pod Restarts Over Time",
+          "gridPos": {"x": 0, "y": 4, "w": 24, "h": 8},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {
+              "datasource": {"type": "prometheus", "uid": "${datasource}"},
+              "expr": "rate(kube_pod_container_status_restarts_total[5m]) * 300",
+              "legendFormat": "{{pod}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "spanNulls": false,
+                "showPoints": "auto",
+                "pointSize": 5
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{"color": "green", "value": null}]
+              },
+              "color": {"mode": "palette-classic"}
+            },
+            "overrides": []
+          },
+          "options": {
+            "tooltip": {"mode": "multi", "sort": "desc"},
+            "legend": {"displayMode": "list", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"]}
+          }
+        },
+        {
+          "id": 5,
+          "type": "table",
+          "title": "All Pods Status",
+          "gridPos": {"x": 0, "y": 12, "w": 24, "h": 10},
+          "datasource": {"type": "prometheus", "uid": "${datasource}"},
+          "targets": [
+            {
+              "datasource": {"type": "prometheus", "uid": "${datasource}"},
+              "expr": "kube_pod_status_phase",
+              "legendFormat": "{{pod}}",
+              "refId": "A",
+              "instant": true,
+              "format": "table"
+            },
+            {
+              "datasource": {"type": "prometheus", "uid": "${datasource}"},
+              "expr": "kube_pod_ready",
+              "legendFormat": "{{pod}}",
+              "refId": "B",
+              "instant": true,
+              "format": "table"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "cellOptions": {"type": "auto"},
+                "inspect": false
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{"color": "green", "value": null}]
+              },
+              "color": {"mode": "thresholds"}
+            },
+            "overrides": [
+              {
+                "matcher": {"id": "byName", "options": "pod"},
+                "properties": [{"id": "displayName", "value": "Pod"}]
+              },
+              {
+                "matcher": {"id": "byName", "options": "namespace"},
+                "properties": [{"id": "displayName", "value": "Namespace"}]
+              },
+              {
+                "matcher": {"id": "byName", "options": "phase"},
+                "properties": [
+                  {"id": "displayName", "value": "Phase"},
+                  {"id": "custom.cellOptions", "value": {"type": "color-background"}},
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {"type": "value", "options": {
+                        "Running":  {"color": "green",  "index": 0},
+                        "Pending":  {"color": "yellow", "index": 1},
+                        "Failed":   {"color": "red",    "index": 2},
+                        "Succeeded":{"color": "blue",   "index": 3},
+                        "Unknown":  {"color": "grey",   "index": 4}
+                      }}
+                    ]
+                  }
+                ]
+              },
+              {
+                "matcher": {"id": "byName", "options": "Value #B"},
+                "properties": [
+                  {"id": "displayName", "value": "Ready"},
+                  {"id": "mappings", "value": [
+                    {"type": "value", "options": {
+                      "1": {"text": "Yes", "color": "green", "index": 0},
+                      "0": {"text": "No",  "color": "red",   "index": 1}
+                    }}
+                  ]},
+                  {"id": "custom.cellOptions", "value": {"type": "color-background"}}
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {"show": false, "reducer": ["sum"], "enablePagination": false}
+          },
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "__name__": true,
+                  "instance": true,
+                  "job": true,
+                  "container": true,
+                  "uid": true
+                },
+                "indexByName": {
+                  "pod": 0,
+                  "namespace": 1,
+                  "phase": 2,
+                  "Value #B": 3
+                },
+                "renameByName": {}
+              }
+            }
+          ]
         }
       ]
     }

@@ -16,11 +16,16 @@ const logger = createLogger("catalog-service");
 const app = express();
 const httpServer = createServer(app);
 
+const corsOrigins = (process.env.CORS_ORIGINS || "https://app.raycode.tech,https://raycode.tech,http://localhost:3000").split(",");
+
 export const io = new SocketServer(httpServer, {
-  cors: { origin: "*" },
+  cors: { origin: corsOrigins, credentials: true },
 });
 
-app.use(cors());
+app.use(cors({
+  origin: corsOrigins,
+  credentials: true,
+}));
 app.use(helmet());
 app.use(httpLogger("catalog-service"));
 app.use(express.json());

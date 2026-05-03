@@ -49,7 +49,8 @@ export async function ensureLinuxUser(githubUsername: string): Promise<void> {
 
 export async function createProjectDir(githubUsername: string, projectName: string): Promise<string> {
   const linuxUser = `u_${githubUsername.toLowerCase().replace(/[^a-z0-9]/g, "")}`;
-  const projectDir = `/home/${linuxUser}/projects/${projectName}`;
+  const safeProjectName = projectName.replace(/[^a-z0-9-]/gi, "");
+  const projectDir = `/home/${linuxUser}/projects/${safeProjectName}`;
   await sshExec(`sudo mkdir -p ${projectDir}/{manifests,logs}`);
   await sshExec(`sudo chown -R ${linuxUser}:${linuxUser} ${projectDir}`);
   return projectDir;
@@ -57,7 +58,8 @@ export async function createProjectDir(githubUsername: string, projectName: stri
 
 export async function removeProjectDir(githubUsername: string, projectName: string): Promise<void> {
   const linuxUser = `u_${githubUsername.toLowerCase().replace(/[^a-z0-9]/g, "")}`;
-  const projectDir = `/home/${linuxUser}/projects/${projectName}`;
+  const safeProjectName = projectName.replace(/[^a-z0-9-]/gi, "");
+  const projectDir = `/home/${linuxUser}/projects/${safeProjectName}`;
   await sshExec(`sudo rm -rf ${projectDir}`).catch(() => {});
 }
 

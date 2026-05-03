@@ -41,3 +41,32 @@ jobs:
             exit 1
           fi
           echo "No secrets found in source files"
+
+  validate-infra:
+    name: Validate Infra
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.0"
+
+      - name: Terraform Init
+        run: terraform init -backend=false
+        working-directory: infra/terraform
+
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: infra/terraform
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+        working-directory: infra/terraform
+
+      - name: Install ansible-lint
+        run: pip install ansible-lint
+
+      - name: Ansible Lint
+        run: ansible-lint infra/ansible/playbooks/
+        continue-on-error: true

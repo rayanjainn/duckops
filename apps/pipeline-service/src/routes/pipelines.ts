@@ -117,6 +117,9 @@ pipelineRouter.post("/project/:projectId/trigger", requireInternalAuth, async (r
 pipelineRouter.get("/:id", requireAuth, async (req, res, next) => {
   try {
     const pipeline = await getPipeline(req.params.id as string);
+    if (pipeline && pipeline.project.userId !== (req as any).user.id) {
+      res.status(403).json({ error: "Forbidden" }); return;
+    }
     res.json(pipeline);
   } catch (err) { next(err); }
 });

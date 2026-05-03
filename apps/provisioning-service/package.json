@@ -5,7 +5,8 @@
     "dev": "tsx watch --env-file=../../.env src/index.ts",
     "build": "tsc && cp -r src/templates dist/templates",
     "start": "node dist/index.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "echo 'No tests - add vitest/jest to enable'"
   },
   "dependencies": {
     "@duckops/db": "workspace:*",

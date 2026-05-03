@@ -57,6 +57,25 @@ generateRouter.post("/stream", async (req, res, next) => {
   let repoDir: string | null = null;
 
   try {
+    const internalSecret = process.env.INTERNAL_API_SECRET || process.env.JWT_SECRET || "duckops-dev-secret-change-in-prod";
+    const isInternal = req.headers["x-internal-call"] === internalSecret;
+
+    if (!isInternal) {
+      const token = (req.headers.authorization?.startsWith("Bearer ")
+        ? req.headers.authorization.slice(7)
+        : req.query.token) as string | undefined;
+      if (!token) return res.status(401).json({ error: "Authentication required" });
+      try {
+        const jwtLib = require("jsonwebtoken") as typeof import("jsonwebtoken");
+        const payload = jwtLib.verify(token, process.env.JWT_SECRET || "duckops-dev-secret-change-in-prod") as { userId: string };
+        const reqUser = await prisma.user.findUnique({ where: { id: payload.userId } });
+        if (!reqUser) return res.status(401).json({ error: "User not found" });
+        (req as any).user = reqUser;
+      } catch {
+        return res.status(401).json({ error: "Invalid or expired token" });
+      }
+    }
+
     const { projectId, prompt, sessionId } = generateSchema.parse(req.body);
 
     const project = await prisma.project.findUnique({
@@ -67,10 +86,12 @@ generateRouter.post("/stream", async (req, res, next) => {
     if (!project) return res.status(404).json({ error: "Project not found" });
     if (!project.githubRepoUrl) return res.status(400).json({ error: "No GitHub repo attached to project" });
 
+    if (!isInternal && (req as any).user && project.userId !== (req as any).user.id) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
     // --- Billing / AI Prompt Limits ---
-    // Skip quota check for internal server-to-server calls (provisioning triggering initial prompt)
-    const internalSecret = process.env.INTERNAL_API_SECRET || process.env.JWT_SECRET;
-    const isInternal = req.headers["x-internal-call"] === internalSecret;
+    // isInternal already set above
     const user = project.user as any;
     if (!isInternal && user.plan === "FREE" && !user.devMode) {
       const now = new Date();

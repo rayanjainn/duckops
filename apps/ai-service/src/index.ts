@@ -12,7 +12,10 @@ const app = express();
 const PORT = process.env.AI_SERVICE_PORT || 4005;
 
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors({ origin: "*" }));
+app.use(cors({
+  origin: (process.env.CORS_ORIGINS || "https://app.raycode.tech,https://raycode.tech,http://localhost:3000").split(","),
+  credentials: true,
+}));
 app.use(httpLogger("ai-service"));
 app.use(express.json({ limit: "2mb" }));
 
