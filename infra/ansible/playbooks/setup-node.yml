@@ -30,7 +30,7 @@
       when: not (ansible_check_mode | default(false))
 
     - name: Install Docker
-      ansible.builtin.shell: /tmp/get-docker.sh
+      ansible.builtin.command: /tmp/get-docker.sh
       args:
         creates: /usr/bin/docker
       changed_when: true
@@ -49,7 +49,7 @@
       when: not (ansible_check_mode | default(false))
 
     - name: Install K3s
-      ansible.builtin.shell: /tmp/get-k3s.sh --write-kubeconfig-mode 644
+      ansible.builtin.command: /tmp/get-k3s.sh --write-kubeconfig-mode 644
       args:
         creates: /usr/local/bin/k3s
       changed_when: true
@@ -107,7 +107,7 @@
         - not (ansible_check_mode | default(false))
 
     - name: Run NodeSource setup script
-      ansible.builtin.shell: /tmp/nodesource_setup.sh
+      ansible.builtin.command: /tmp/nodesource_setup.sh
       when:
         - ansible_os_family == "Debian"
         - not ('/usr/bin/node' is file)
