@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { exec } from "child_process";
 import { promisify } from "util";
+import { register, Gauge } from "prom-client";
 import { prisma } from "@duckops/db";
 import { NotFoundError, stripAnsi } from "@duckops/shared-utils";
 import {
@@ -188,6 +189,49 @@ logsRouter.get("/:projectId", requireAuth, async (req, res, next) => {
 
 // GET /api/platform/metrics — PM2 stats for all backend services (auth via query token)
 export const platformRouter = Router();
+
+// ── Prometheus Metrics ───────────────────────────────────────────────────────
+
+const cpuGauge = new Gauge({
+  name: "duckops_service_cpu_percent",
+  help: "CPU usage percentage of the service",
+  labelNames: ["service"],
+});
+
+const memGauge = new Gauge({
+  name: "duckops_service_memory_bytes",
+  help: "Memory usage in bytes",
+  labelNames: ["service"],
+});
+
+const restartGauge = new Gauge({
+  name: "duckops_service_restarts_total",
+  help: "Total number of service restarts",
+  labelNames: ["service"],
+});
+
+const statusGauge = new Gauge({
+  name: "duckops_service_status",
+  help: "Service status (1 for online, 0 otherwise)",
+  labelNames: ["service"],
+});
+
+platformRouter.get("/metrics/prometheus", async (_req, res) => {
+  try {
+    const metrics = await getPm2Metrics();
+    metrics.forEach((m) => {
+      cpuGauge.set({ service: m.name }, m.cpu);
+      memGauge.set({ service: m.name }, m.memoryBytes);
+      restartGauge.set({ service: m.name }, m.restarts);
+      statusGauge.set({ service: m.name }, m.status === "online" ? 1 : 0);
+    });
+
+    res.set("Content-Type", register.contentType);
+    res.end(await register.metrics());
+  } catch (error) {
+    res.status(500).end(error);
+  }
+});
 
 platformRouter.get("/metrics", requireAuth, async (_req, res) => {
   const metrics = await getPm2Metrics();
