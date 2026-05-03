@@ -2,7 +2,7 @@ import cron from "node-cron";
 import { prisma, ProjectStatus, HealthStatus } from "@duckops/db";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { createLogger } from "@duckops/shared-utils";
+import { createLogger, stripAnsi } from "@duckops/shared-utils";
 import { sshExec } from "./sshService";
 import { io } from "../index";
 
@@ -175,7 +175,7 @@ export async function getProjectLogs(
       out = result.stdout || result.stderr || "";
     }
     if (!out.trim()) return "(no output — pod may not have logged anything yet)";
-    return out;
+    return stripAnsi(out);
   } catch (err: any) {
     logger.error(`Failed to get logs for ${safeName}: ${err.message}`);
     return err.stderr || err.message || "Error fetching logs";

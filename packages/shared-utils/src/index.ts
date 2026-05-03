@@ -246,3 +246,11 @@ export function slugify(text: string): string {
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+/**
+ * Strips all ANSI/VT100 escape sequences from a string.
+ */
+export function stripAnsi(str: string): string {
+  // eslint-disable-next-line no-control-regex
+  return str.replace(/\x1B\[[0-9;]*[mGKHFABCDJns]|\x1B\([0-9A-Z]|\x1B[=>]|\r/g, "");
+}

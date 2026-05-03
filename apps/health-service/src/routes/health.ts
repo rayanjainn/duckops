@@ -2,7 +2,7 @@ import { Router } from "express";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { prisma } from "@duckops/db";
-import { NotFoundError } from "@duckops/shared-utils";
+import { NotFoundError, stripAnsi } from "@duckops/shared-utils";
 import {
   getProjectHealthHistory,
   getProjectLogs,
@@ -37,13 +37,72 @@ async function getPm2Metrics() {
   }
 }
 
-async function getPm2Logs(serviceName: string, lines: number): Promise<string[]> {
+// No local stripAnsi here
+
+export interface ParsedLogLine {
+  raw: string;      // cleaned text, no ANSI
+  time?: string;    // "03:27:23"
+  service?: string; // "provisioning-service"
+  level: "error" | "warn" | "info" | "debug" | "http";
+  method?: string;  // GET POST etc.
+  path?: string;    // /api/...
+  status?: number;  // 200 304 etc.
+  duration?: string;// "376ms"
+  message: string;  // human-readable summary
+}
+
+function parseLine(raw: string): ParsedLogLine {
+  // PM2 HTTP access log: 03:27:23  ◆  provisioning-service  GET   /path  200  376ms  Chrome
+  const httpMatch = raw.match(
+    /^(\d{2}:\d{2}:\d{2})\s+◆\s+([\w-]+)\s+(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\s+(\S+)\s+(\d{3})\s+([\d.]+ms)\s*(.*)$/,
+  );
+  if (httpMatch) {
+    const status = Number(httpMatch[5]);
+    return {
+      raw,
+      time: httpMatch[1],
+      service: httpMatch[2],
+      level: status >= 500 ? "error" : status >= 400 ? "warn" : "http",
+      method: httpMatch[3],
+      path: httpMatch[4],
+      status,
+      duration: httpMatch[6],
+      message: `${httpMatch[3]} ${httpMatch[4]} ${status} ${httpMatch[6]}`,
+    };
+  }
+  // JSON structured log: {"level":"info","message":"...","timestamp":"..."}
+  try {
+    const p = JSON.parse(raw) as { level?: string; message?: string; timestamp?: string };
+    if (p.message) {
+      const lvl = (p.level ?? "info").toLowerCase() as ParsedLogLine["level"];
+      return {
+        raw,
+        time: p.timestamp ? p.timestamp.slice(11, 19) : undefined,
+        level: ["error", "warn", "info", "debug"].includes(lvl) ? lvl : "info",
+        message: p.message,
+      };
+    }
+  } catch { /* not JSON */ }
+  // Fallback keyword detection
+  const lower = raw.toLowerCase();
+  const level: ParsedLogLine["level"] =
+    lower.includes("error") || lower.includes("fail") ? "error"
+    : lower.includes("warn") ? "warn"
+    : lower.includes("debug") ? "debug"
+    : "info";
+  return { raw, level, message: raw };
+}
+
+async function getPm2Logs(serviceName: string, lines: number): Promise<ParsedLogLine[]> {
   try {
     const { stdout } = await execAsync(
       `pm2 logs ${serviceName} --lines ${lines} --nostream --raw 2>&1 || true`,
       { shell: "/bin/bash" },
     );
-    return stdout.split("\n").filter(Boolean);
+    return stdout
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => parseLine(stripAnsi(l)));
   } catch {
     return [];
   }
@@ -123,14 +182,17 @@ platformRouter.get("/logs/:service", requireAuth, async (req, res) => {
   const initial = await getPm2Logs(service.name, 200);
   send({ type: "backlog", lines: initial });
 
-  // Poll for new lines every 2s by re-reading last 5 lines and diffing
-  let lastLine = initial[initial.length - 1] ?? "";
+  // Poll for new lines every 2s by re-reading last 50 lines and diffing
+  let lastRaw = initial[initial.length - 1]?.raw ?? "";
   const interval = setInterval(async () => {
-    const recent = await getPm2Logs(service.name, 20);
-    const idx = recent.lastIndexOf(lastLine);
+    const recent = await getPm2Logs(service.name, 50);
+    
+    // Find where we left off by comparing the 'raw' string content
+    const idx = recent.map(l => l.raw).lastIndexOf(lastRaw);
     const newLines = idx >= 0 ? recent.slice(idx + 1) : recent;
+    
     if (newLines.length > 0) {
-      lastLine = newLines[newLines.length - 1];
+      lastRaw = newLines[newLines.length - 1].raw;
       send({ type: "lines", lines: newLines });
     }
   }, 2000);
