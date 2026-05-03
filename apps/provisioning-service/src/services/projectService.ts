@@ -16,6 +16,12 @@ const logger = createLogger("project-service");
 const IS_CLOUD = process.env.DEPLOY_MODE === "cloud";
 const DOMAIN = process.env.DOMAIN || "yourdomain.tech";
 
+// Single source of truth for project hostnames — must match Ansible's deploy-app.yml template exactly:
+// {{ project_name }}-{{ github_username }}-duckops.{{ platform_domain }}
+export function projectHostname(name: string, githubUsername: string, domain = DOMAIN) {
+  return `${name}-${githubUsername.toLowerCase().replace(/[^a-z0-9]/g, "")}-duckops.${domain}`;
+}
+
 export interface CreateProjectInput {
   name: string;
   displayName: string;
@@ -176,17 +182,15 @@ export async function provisionProject(
   // Step 6: Mark pipeline ready and create Jenkins job
   const isTurbo = input.framework === "turbo";
 
-  // URL format: local = "http://{name}.localhost:8080"
-  //             cloud = "https://{name}-{github}-duckops.{DOMAIN}"
   const liveUrl = IS_CLOUD
-    ? `https://${input.name}-${input.githubUsername.toLowerCase()}-duckops.${DOMAIN}`
+    ? `https://${projectHostname(input.name, input.githubUsername)}`
     : isTurbo
       ? `http://${input.name}-api.localhost:8080`
       : `http://${input.name}.localhost:8080`;
 
   const webUrl = isTurbo
     ? IS_CLOUD
-      ? `https://${input.name}-web-${input.githubUsername.toLowerCase()}-duckops.${DOMAIN}`
+      ? `https://${projectHostname(`${input.name}-web`, input.githubUsername)}`
       : `http://${input.name}-web.localhost:8080`
     : null;
 
