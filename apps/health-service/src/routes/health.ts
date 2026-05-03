@@ -190,6 +190,13 @@ logsRouter.get("/:projectId", requireAuth, async (req, res, next) => {
 // GET /api/platform/metrics — PM2 stats for all backend services (auth via query token)
 export const platformRouter = Router();
 
+// Test DB Connection on startup
+prisma.user.findFirst().then(user => {
+  console.log("DB Connection Test: Success. Found user:", user?.email || "None");
+}).catch(err => {
+  console.error("DB Connection Test: FAILED.", err.message);
+});
+
 // ── Prometheus Metrics ───────────────────────────────────────────────────────
 
 const cpuGauge = new Gauge({
