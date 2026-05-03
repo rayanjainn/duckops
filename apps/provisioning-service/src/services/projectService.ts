@@ -179,14 +179,14 @@ export async function provisionProject(
   // URL format: local = "http://{name}.localhost:8080"
   //             cloud = "https://{name}-{github}-duckops.{DOMAIN}"
   const liveUrl = IS_CLOUD
-    ? `https://${input.name}-${input.githubUsername.toLowerCase()}.${DOMAIN}`
+    ? `https://${input.name}-${input.githubUsername.toLowerCase()}-duckops.${DOMAIN}`
     : isTurbo
       ? `http://${input.name}-api.localhost:8080`
       : `http://${input.name}.localhost:8080`;
 
   const webUrl = isTurbo
     ? IS_CLOUD
-      ? `https://${input.name}-web-${input.githubUsername.toLowerCase()}.${DOMAIN}`
+      ? `https://${input.name}-web-${input.githubUsername.toLowerCase()}-duckops.${DOMAIN}`
       : `http://${input.name}-web.localhost:8080`
     : null;
 
