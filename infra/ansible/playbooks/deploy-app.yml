@@ -22,7 +22,7 @@
     - name: Create Image Pull Secret (ECR)
       shell: |
         kubectl create secret docker-registry regcred \
-          --docker-server=https://{{ ecr_registry }} \
+          --docker-server={{ ecr_registry }} \
           --docker-username=AWS \
           --docker-password="{{ ecr_token }}" \
           --namespace {{ k8s_namespace }} \
