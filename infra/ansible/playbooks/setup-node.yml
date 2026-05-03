@@ -6,7 +6,7 @@
   tasks:
     - name: Update apt cache
       ansible.builtin.apt:
-        update_cache: yes
+        update_cache: true
       when: ansible_os_family == "Debian"
 
     - name: Install dependencies
@@ -22,21 +22,37 @@
         state: present
       when: ansible_os_family == "Debian"
 
+    - name: Download Docker install script
+      ansible.builtin.get_url:
+        url: https://get.docker.com
+        dest: /tmp/get-docker.sh
+        mode: "0755"
+      when: not (ansible_check_mode | default(false))
+
     - name: Install Docker
-      ansible.builtin.shell: curl -fsSL https://get.docker.com | sh
+      ansible.builtin.shell: /tmp/get-docker.sh
       args:
         creates: /usr/bin/docker
+      changed_when: true
 
     - name: Add user to docker group
       ansible.builtin.user:
         name: "{{ ansible_user }}"
         groups: docker
-        append: yes
+        append: true
+
+    - name: Download K3s install script
+      ansible.builtin.get_url:
+        url: https://get.k3s.io
+        dest: /tmp/get-k3s.sh
+        mode: "0755"
+      when: not (ansible_check_mode | default(false))
 
     - name: Install K3s
-      ansible.builtin.shell: curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644
+      ansible.builtin.shell: /tmp/get-k3s.sh --write-kubeconfig-mode 644
       args:
         creates: /usr/local/bin/k3s
+      changed_when: true
 
     - name: Check if swap is already configured
       ansible.builtin.stat:
@@ -51,7 +67,7 @@
     - name: Set swap file permissions
       ansible.builtin.file:
         path: /swapfile
-        mode: '0600'
+        mode: "0600"
       when: not swapfile_stat.stat.exists
 
     - name: Format swap file
@@ -67,24 +83,38 @@
     - name: Persist swap in fstab
       ansible.builtin.lineinfile:
         path: /etc/fstab
-        line: '/swapfile none swap sw 0 0'
+        line: "/swapfile none swap sw 0 0"
         state: present
 
-    - name: Set swappiness to 10 (prefer RAM, use swap only under pressure)
+    - name: Set swappiness to 10
       ansible.builtin.command: sysctl -w vm.swappiness=10
       changed_when: true
 
     - name: Persist swappiness setting
       ansible.builtin.lineinfile:
         path: /etc/sysctl.conf
-        regexp: '^vm.swappiness'
-        line: 'vm.swappiness=10'
+        regexp: "^vm.swappiness"
+        line: "vm.swappiness=10"
         state: present
 
+    - name: Download NodeSource setup script
+      ansible.builtin.get_url:
+        url: https://deb.nodesource.com/setup_22.x
+        dest: /tmp/nodesource_setup.sh
+        mode: "0755"
+      when:
+        - ansible_os_family == "Debian"
+        - not (ansible_check_mode | default(false))
+
+    - name: Run NodeSource setup script
+      ansible.builtin.shell: /tmp/nodesource_setup.sh
+      when:
+        - ansible_os_family == "Debian"
+        - not ('/usr/bin/node' is file)
+      changed_when: true
+
     - name: Install Node.js 22
-      ansible.builtin.shell: |
-        curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-        apt-get install -y nodejs
+      ansible.builtin.apt:
+        name: nodejs
+        state: present
       when: ansible_os_family == "Debian"
-      args:
-        creates: /usr/bin/node
