@@ -91,6 +91,8 @@ export const platformApi = {
       services: { name: string; label: string; port: number }[];
       metrics: { name: string; status: string; cpu: number; memoryBytes: number; restarts: number; uptime: number; pid: number }[];
     }),
+  getHistory: (serviceName: string) =>
+    healthAxios.get(`/api/platform/metrics/history/${serviceName}`).then((r) => r.data as { history: any[] }),
   logsUrl: (serviceName: string) =>
     `${HEALTH_BASE}/api/platform/logs/${serviceName}?token=${getToken()}`,
 };

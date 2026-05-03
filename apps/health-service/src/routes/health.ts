@@ -37,6 +37,37 @@ async function getPm2Metrics() {
   }
 }
 
+/**
+ * Periodically records metrics for all platform services into the database.
+ * This provides the historical data needed for time-series charts (Recharts).
+ */
+export function startMetricCollection() {
+  setInterval(async () => {
+    const metrics = await getPm2Metrics();
+    if (metrics.length === 0) return;
+
+    try {
+      await prisma.serviceMetric.createMany({
+        data: metrics.map(m => ({
+          serviceName: m.name,
+          cpu: m.cpu,
+          memoryBytes: BigInt(m.memoryBytes),
+          restarts: m.restarts,
+          status: m.status,
+        })),
+      });
+      
+      // Cleanup: Keep only last 2 hours of metrics (2 hours * 60 min * 6 samples/min = 720 samples per service)
+      const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000);
+      await prisma.serviceMetric.deleteMany({
+        where: { timestamp: { lt: cutoff } }
+      });
+    } catch (err) {
+      console.error("Failed to save service metrics:", err);
+    }
+  }, 10000); // Every 10 seconds
+}
+
 // No local stripAnsi here
 
 export interface ParsedLogLine {
@@ -161,6 +192,24 @@ export const platformRouter = Router();
 platformRouter.get("/metrics", requireAuth, async (_req, res) => {
   const metrics = await getPm2Metrics();
   res.json({ services: SERVICES, metrics });
+});
+
+// GET /api/platform/metrics/history/:service — historical stats for a specific service
+platformRouter.get("/metrics/history/:service", requireAuth, async (req, res) => {
+  const history = await prisma.serviceMetric.findMany({
+    where: { serviceName: req.params.service },
+    orderBy: { timestamp: "desc" },
+    take: 120, // ~20 minutes of data at 10s intervals
+  });
+  
+  // Format BigInt for JSON response
+  const formatted = history.reverse().map(h => ({
+    ...h,
+    memoryBytes: Number(h.memoryBytes),
+    time: h.timestamp.toISOString().slice(11, 19),
+  }));
+
+  res.json({ history: formatted });
 });
 
 // GET /api/platform/logs/:service — SSE stream of PM2 logs for one service (auth via query token)

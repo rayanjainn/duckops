@@ -256,3 +256,15 @@ model AwsConnection {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
+
+model ServiceMetric {
+  id          String   @id @default(cuid())
+  serviceName String
+  cpu         Float
+  memoryBytes BigInt
+  restarts    Int
+  status      String
+  timestamp   DateTime @default(now())
+
+  @@index([serviceName, timestamp])
+}

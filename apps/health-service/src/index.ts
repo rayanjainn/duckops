@@ -8,7 +8,7 @@ import helmet from "helmet";
 import { createServer } from "http";
 import { Server as SocketServer } from "socket.io";
 
-import { healthRouter, logsRouter, platformRouter } from "./routes/health";
+import { healthRouter, logsRouter, platformRouter, startMetricCollection } from "./routes/health";
 import { errorHandler } from "./middleware/errorHandler";
 import { startHealthCheckCron } from "./services/healthCheckService";
 import { createLogger, httpLogger } from "@duckops/shared-utils";
@@ -39,4 +39,5 @@ const PORT = Number(process.env.PORT) || 4004;
 httpServer.listen(PORT, () => {
   logger.info(`Health Service running on port ${PORT}`);
   startHealthCheckCron();
+  startMetricCollection();
 });

@@ -29,20 +29,25 @@ const SERVICE_COLORS: Record<string, string> = {
   "duckops-catalog":      "#f43f5e",
 };
 
-const LOG_COLORS: Record<string, string> = {
-  error:  "text-red-400",
-  warn:   "text-amber-400",
-  info:   "text-sky-400",
-  debug:  "text-slate-400",
-};
-
-function classifyLine(line: string): string {
-  const l = line.toLowerCase();
-  if (l.includes("error") || l.includes("err ") || l.includes("failed")) return "error";
-  if (l.includes("warn")) return "warn";
-  if (l.includes("info")) return "info";
-  return "debug";
+export interface ParsedLogLine {
+  raw: string;
+  time?: string;
+  service?: string;
+  level: "error" | "warn" | "info" | "debug" | "http";
+  method?: string;
+  path?: string;
+  status?: number;
+  duration?: string;
+  message: string;
 }
+
+const LOG_COLORS: Record<string, string> = {
+  error:  "text-red-400 font-bold bg-red-500/5",
+  warn:   "text-amber-400 bg-amber-500/5",
+  info:   "text-sky-400",
+  http:   "text-emerald-400 font-mono",
+  debug:  "text-slate-500 italic",
+};
 
 function fmtBytes(b: number) {
   if (b > 1024 * 1024 * 1024) return (b / 1024 / 1024 / 1024).toFixed(1) + " GB";
@@ -61,138 +66,161 @@ function fmtUptime(ms: number) {
 // ── Metric Card ───────────────────────────────────────────────────────────────
 
 function MetricCard({
-  service, metric, history, active, onClick,
+  service, metric, active, onClick,
 }: {
   service: ServiceMeta;
   metric: Metric | undefined;
-  history: MetricSnapshot[];
   active: boolean;
   onClick: () => void;
 }) {
   const color = SERVICE_COLORS[service.name] ?? "#f59e0b";
   const isOnline = metric?.status === "online";
-  const cpuData = history.map((h, i) => ({ i, cpu: h.cpu }));
-  const memMB = metric ? metric.memoryBytes / 1024 / 1024 : 0;
-  const memPct = Math.min(100, (memMB / 512) * 100);
 
   return (
     <button
       onClick={onClick}
       className={cn(
-        "w-full text-left p-4 rounded-xl border transition-all duration-200",
+        "w-full text-left p-3 rounded-lg border transition-all duration-200 group relative overflow-hidden",
         active
-          ? "border-amber-500/50 bg-amber-500/5 shadow-lg shadow-amber-900/10"
-          : "border-border bg-surface-3/30 hover:border-border-2 hover:bg-surface-3/60",
+          ? "border-amber-500/50 bg-amber-500/5 ring-1 ring-amber-500/20"
+          : "border-border bg-surface-2/40 hover:border-border-2 hover:bg-surface-3/60",
       )}
     >
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <span
-            className="w-2.5 h-2.5 rounded-full shrink-0 relative"
-            style={{ background: isOnline ? color : "#ef4444" }}
-          >
-            {isOnline && (
-              <span
-                className="absolute inset-0 rounded-full animate-ping opacity-40"
-                style={{ background: color }}
-              />
-            )}
-          </span>
-          <span className="text-sm font-semibold text-foreground">{service.label}</span>
-        </div>
-        <span className={cn(
-          "text-[10px] px-1.5 py-0.5 rounded-full font-medium border",
-          isOnline ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" : "text-red-400 bg-red-500/10 border-red-500/20",
-        )}>
-          {metric?.status ?? "—"}
-        </span>
-      </div>
-
-      {/* CPU sparkline */}
-      <div className="h-10 mb-3">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={cpuData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id={`grad-${service.name}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={color} stopOpacity={0.3} />
-                <stop offset="100%" stopColor={color} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <Area
-              type="monotone"
-              dataKey="cpu"
-              stroke={color}
-              strokeWidth={1.5}
-              fill={`url(#grad-${service.name})`}
-              dot={false}
-              isAnimationActive={false}
-            />
-            <Tooltip
-              content={({ active, payload }) =>
-                active && payload?.[0] ? (
-                  <div className="text-[10px] bg-surface border border-border px-2 py-1 rounded">
-                    CPU: {(payload[0].value as number).toFixed(1)}%
-                  </div>
-                ) : null
-              }
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* Stats row */}
-      <div className="grid grid-cols-3 gap-2 text-[11px]">
-        <div>
-          <p className="text-muted mb-0.5 flex items-center gap-1"><Cpu className="h-2.5 w-2.5" /> CPU</p>
-          <p className="font-mono font-semibold text-foreground">{metric?.cpu.toFixed(1) ?? "—"}%</p>
-        </div>
-        <div>
-          <p className="text-muted mb-0.5 flex items-center gap-1"><MemoryStick className="h-2.5 w-2.5" /> MEM</p>
-          <p className="font-mono font-semibold text-foreground">{metric ? fmtBytes(metric.memoryBytes) : "—"}</p>
-        </div>
-        <div>
-          <p className="text-muted mb-0.5 flex items-center gap-1"><RefreshCw className="h-2.5 w-2.5" /> RST</p>
-          <p className={cn("font-mono font-semibold", metric && metric.restarts > 5 ? "text-amber-400" : "text-foreground")}>
-            {metric?.restarts ?? "—"}
-          </p>
-        </div>
-      </div>
-
-      {/* Memory bar */}
-      <div className="mt-3">
-        <div className="h-1 bg-surface-4 rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full transition-all duration-1000"
-            style={{ width: `${memPct}%`, background: color }}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div 
+            className="w-1.5 h-1.5 rounded-full" 
+            style={{ 
+              background: isOnline ? color : "#ef4444",
+              boxShadow: isOnline ? `0 0 8px ${color}` : "none"
+            }} 
           />
+          <span className="text-xs font-medium text-foreground group-hover:text-amber-400 transition-colors">
+            {service.label}
+          </span>
         </div>
-        <div className="flex justify-between mt-1 text-[10px] text-muted">
-          <span>{metric ? fmtBytes(metric.memoryBytes) : "0 MB"}</span>
-          <span className="text-muted-2">{metric?.uptime ? fmtUptime(metric.uptime) : "—"} up</span>
-        </div>
+        {metric && (
+          <span className="text-[10px] font-mono text-muted-2">
+            {metric.cpu.toFixed(0)}%
+          </span>
+        )}
       </div>
-
-      {metric && metric.restarts > 5 && (
-        <div className="mt-2 flex items-center gap-1.5 text-[10px] text-amber-400">
-          <AlertTriangle className="h-3 w-3" />
-          High restart count
-        </div>
+      {active && (
+        <div 
+          className="absolute left-0 top-0 bottom-0 w-1" 
+          style={{ background: color }}
+        />
       )}
     </button>
+  );
+}
+
+// ── Service Monitoring (Main Area) ───────────────────────────────────────────
+
+function ServiceMonitoring({ 
+  service, 
+  metric, 
+  history, 
+  color 
+}: { 
+  service: ServiceMeta; 
+  metric: Metric | undefined; 
+  history: any[];
+  color: string;
+}) {
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Metrics Grid */}
+      <div className="grid grid-cols-4 gap-4 p-4 shrink-0 bg-surface-2/20 border-b border-border">
+        <div className="p-3 rounded-xl bg-surface-3/30 border border-border/50">
+          <p className="text-[10px] uppercase tracking-wider text-muted font-bold mb-1">CPU Usage</p>
+          <div className="flex items-end gap-2">
+            <span className="text-2xl font-mono font-bold text-foreground">{metric?.cpu.toFixed(1) ?? "0.0"}%</span>
+            <Activity className="h-4 w-4 text-emerald-400 mb-1" />
+          </div>
+        </div>
+        <div className="p-3 rounded-xl bg-surface-3/30 border border-border/50">
+          <p className="text-[10px] uppercase tracking-wider text-muted font-bold mb-1">Memory (RSS)</p>
+          <div className="flex items-end gap-2">
+            <span className="text-2xl font-mono font-bold text-foreground">{metric ? fmtBytes(metric.memoryBytes) : "0 MB"}</span>
+            <MemoryStick className="h-4 w-4 text-purple-400 mb-1" />
+          </div>
+        </div>
+        <div className="p-3 rounded-xl bg-surface-3/30 border border-border/50">
+          <p className="text-[10px] uppercase tracking-wider text-muted font-bold mb-1">Restarts</p>
+          <div className="flex items-end gap-2">
+            <span className={cn("text-2xl font-mono font-bold", metric && metric.restarts > 5 ? "text-amber-400" : "text-foreground")}>
+              {metric?.restarts ?? "0"}
+            </span>
+            <RefreshCw className={cn("h-4 w-4 mb-1", metric && metric.restarts > 5 ? "text-amber-400" : "text-slate-500")} />
+          </div>
+        </div>
+        <div className="p-3 rounded-xl bg-surface-3/30 border border-border/50">
+          <p className="text-[10px] uppercase tracking-wider text-muted font-bold mb-1">Uptime</p>
+          <div className="flex items-end gap-2">
+            <span className="text-2xl font-mono font-bold text-foreground">{metric?.uptime ? fmtUptime(metric.uptime) : "—"}</span>
+            <Play className="h-4 w-4 text-sky-400 mb-1" />
+          </div>
+        </div>
+      </div>
+
+      {/* Chart Section */}
+      <div className="h-64 p-4 shrink-0 bg-surface/50 border-b border-border">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <Activity className="h-4 w-4 text-muted" />
+            Performance History (Last 20m)
+          </h3>
+          <div className="flex items-center gap-4 text-[10px] font-medium uppercase tracking-tighter">
+            <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full" style={{ background: color }} /> CPU %</div>
+          </div>
+        </div>
+        <div className="h-48">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={history}>
+              <defs>
+                <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={color} stopOpacity={0.2} />
+                  <stop offset="100%" stopColor={color} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <Tooltip 
+                contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155", color: "#f8fafc", fontSize: "11px" }}
+                itemStyle={{ color: color }}
+              />
+              <Area 
+                type="monotone" 
+                dataKey="cpu" 
+                stroke={color} 
+                fill="url(#chartGrad)" 
+                strokeWidth={2}
+                dot={false}
+                isAnimationActive={false}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Logs Section */}
+      <div className="flex-1 overflow-hidden">
+        <LogPanel serviceName={service.name} color={color} />
+      </div>
+    </div>
   );
 }
 
 // ── Log Panel ─────────────────────────────────────────────────────────────────
 
 function LogPanel({ serviceName, color }: { serviceName: string; color: string }) {
-  const [lines, setLines] = useState<string[]>([]);
+  const [lines, setLines] = useState<ParsedLogLine[]>([]);
   const [filter, setFilter] = useState("");
   const [paused, setPaused] = useState(false);
   const [connected, setConnected] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const pausedRef = useRef(false);
-  const pendingRef = useRef<string[]>([]);
+  const pendingRef = useRef<ParsedLogLine[]>([]);
 
   pausedRef.current = paused;
 
@@ -205,14 +233,14 @@ function LogPanel({ serviceName, color }: { serviceName: string; color: string }
     es.onopen = () => setConnected(true);
     es.onmessage = (e) => {
       try {
-        const msg = JSON.parse(e.data) as { type: string; lines: string[] };
+        const msg = JSON.parse(e.data) as { type: string; lines: ParsedLogLine[] };
         if (pausedRef.current) {
           pendingRef.current.push(...msg.lines);
           return;
         }
         setLines((prev) => {
           const next = [...prev, ...msg.lines];
-          return next.slice(-2000); // cap at 2000 lines
+          return next.slice(-2000);
         });
       } catch { /* ignore */ }
     };
@@ -238,7 +266,7 @@ function LogPanel({ serviceName, color }: { serviceName: string; color: string }
   }, []);
 
   const filtered = filter
-    ? lines.filter((l) => l.toLowerCase().includes(filter.toLowerCase()))
+    ? lines.filter((l) => l.raw.toLowerCase().includes(filter.toLowerCase()))
     : lines;
 
   return (
@@ -296,14 +324,26 @@ function LogPanel({ serviceName, color }: { serviceName: string; color: string }
             {connected ? "Waiting for log output…" : "Connecting…"}
           </div>
         ) : (
-          filtered.map((line, i) => {
-            const cls = classifyLine(line);
-            return (
-              <div key={i} className={cn("whitespace-pre-wrap break-all", LOG_COLORS[cls] ?? "text-slate-300")}>
-                {line}
+          filtered.map((line, i) => (
+            <div key={i} className={cn(
+              "group flex gap-3 px-2 py-0.5 hover:bg-white/5 transition-colors border-l-2",
+              LOG_COLORS[line.level] ?? "text-slate-300",
+              line.level === "error" ? "border-red-500/50" : "border-transparent"
+            )}>
+              <span className="shrink-0 text-slate-500 w-16 opacity-50 select-none">{line.time}</span>
+              <div className="flex-1 whitespace-pre-wrap break-all">
+                {line.method && (
+                  <span className="mr-2 font-bold px-1 bg-white/10 rounded text-[9px] uppercase">{line.method}</span>
+                )}
+                {line.message}
+                {line.status && (
+                  <span className={cn("ml-2 font-bold", line.status >= 400 ? "text-red-400" : "text-emerald-400")}>
+                    {line.status}
+                  </span>
+                )}
               </div>
-            );
-          })
+            </div>
+          ))
         )}
         <div ref={bottomRef} />
       </div>
@@ -364,16 +404,14 @@ function OverviewBar({ metrics }: { metrics: Metric[] }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function LogsPage() {
   const [services, setServices] = useState<ServiceMeta[]>([]);
   const [metrics, setMetrics] = useState<Metric[]>([]);
-  const [history, setHistory] = useState<Record<string, MetricSnapshot[]>>({});
+  const [activeHistory, setActiveHistory] = useState<any[]>([]);
   const [activeService, setActiveService] = useState<string>("");
 
   // Poll metrics every 3s
   useEffect(() => {
     let cancelled = false;
-
     const poll = async () => {
       try {
         const data = await platformApi.getMetrics();
@@ -383,22 +421,27 @@ export default function LogsPage() {
         if (!activeService && data.services.length > 0) {
           setActiveService(data.services[0].name);
         }
-        const now = Date.now();
-        setHistory((prev) => {
-          const next = { ...prev };
-          for (const m of data.metrics) {
-            const snap: MetricSnapshot = { ...m, ts: now };
-            next[m.name] = [...(prev[m.name] ?? []), snap].slice(-40);
-          }
-          return next;
-        });
       } catch { /* ignore */ }
     };
-
     poll();
     const id = setInterval(poll, 3000);
     return () => { cancelled = true; clearInterval(id); };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeService]);
+
+  // Fetch history for active service
+  useEffect(() => {
+    if (!activeService) return;
+    let cancelled = false;
+    const fetchHist = async () => {
+      try {
+        const { history } = await platformApi.getHistory(activeService);
+        if (!cancelled) setActiveHistory(history);
+      } catch { /* ignore */ }
+    };
+    fetchHist();
+    const id = setInterval(fetchHist, 10000); // refresh history every 10s
+    return () => { cancelled = true; clearInterval(id); };
+  }, [activeService]);
 
   const activeColor = activeService ? (SERVICE_COLORS[activeService] ?? "#f59e0b") : "#f59e0b";
   const activeMeta = services.find((s) => s.name === activeService);
@@ -420,67 +463,41 @@ export default function LogsPage() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left: service cards */}
-        <div className="w-64 shrink-0 border-r border-border overflow-y-auto p-3 space-y-2">
+        <div className="w-60 shrink-0 border-r border-border overflow-y-auto p-4 space-y-3 bg-surface-2/20">
+          <div className="px-2 mb-4">
+            <h2 className="text-[10px] font-bold uppercase tracking-widest text-muted">Platform Nodes</h2>
+          </div>
           {services.length === 0
             ? Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="h-36 rounded-xl skeleton" />
+                <div key={i} className="h-12 rounded-lg skeleton" />
               ))
             : services.map((svc) => (
                 <MetricCard
                   key={svc.name}
                   service={svc}
                   metric={metrics.find((m) => m.name === svc.name)}
-                  history={history[svc.name] ?? []}
                   active={activeService === svc.name}
                   onClick={() => setActiveService(svc.name)}
                 />
               ))}
         </div>
 
-        {/* Right: log panel */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Tab bar */}
-          <div className="flex items-center gap-0 border-b border-border bg-surface shrink-0 overflow-x-auto">
-            {services.map((svc) => {
-              const color = SERVICE_COLORS[svc.name] ?? "#f59e0b";
-              const isActive = activeService === svc.name;
-              const m = metrics.find((x) => x.name === svc.name);
-              return (
-                <button
-                  key={svc.name}
-                  onClick={() => setActiveService(svc.name)}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-3 text-xs font-medium border-b-2 transition-all whitespace-nowrap shrink-0",
-                    isActive
-                      ? "border-b-2 text-foreground"
-                      : "border-transparent text-muted hover:text-foreground hover:bg-surface-3/40",
-                  )}
-                  style={isActive ? { borderBottomColor: color } : {}}
-                >
-                  <span
-                    className="w-1.5 h-1.5 rounded-full"
-                    style={{ background: m?.status === "online" ? color : "#ef4444" }}
-                  />
-                  {svc.label}
-                  {m && (
-                    <span className="font-mono text-[10px] text-muted-2">{m.cpu.toFixed(0)}%</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Active log */}
-          <div className="flex-1 overflow-hidden">
-            {activeService ? (
-              <LogPanel key={activeService} serviceName={activeService} color={activeColor} />
-            ) : (
-              <div className="flex items-center justify-center h-full text-muted text-sm gap-2">
-                <ChevronDown className="h-4 w-4" />
-                Select a service
-              </div>
-            )}
-          </div>
+        {/* Right: Monitoring Section */}
+        <div className="flex-1 flex flex-col overflow-hidden bg-surface">
+          {activeService && activeMeta ? (
+            <ServiceMonitoring 
+              key={activeService}
+              service={activeMeta}
+              metric={metrics.find(m => m.name === activeService)}
+              history={activeHistory}
+              color={activeColor}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full text-muted text-sm gap-2">
+              <ChevronDown className="h-4 w-4" />
+              Select a service from the sidebar
+            </div>
+          )}
         </div>
       </div>
     </div>
