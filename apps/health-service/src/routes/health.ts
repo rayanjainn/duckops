@@ -197,6 +197,13 @@ prisma.user.findFirst().then(user => {
   console.error("DB Connection Test: FAILED.", err.message);
 });
 
+// Test raw SQL on service_metrics
+prisma.$queryRaw`SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = 'public'`.then(tables => {
+  console.log("DB Tables in public:", (tables as any[]).map(t => t.tablename).join(", "));
+}).catch(err => {
+  console.error("DB Raw Query FAILED.", err.message);
+});
+
 // ── Prometheus Metrics ───────────────────────────────────────────────────────
 
 const cpuGauge = new Gauge({
