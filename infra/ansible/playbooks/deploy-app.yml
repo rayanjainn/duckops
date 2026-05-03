@@ -24,6 +24,7 @@
 
     - name: Create Image Pull Secret (ECR)
       ansible.builtin.shell: |
+        set -o pipefail
         kubectl create secret docker-registry regcred \
           --docker-server={{ ecr_registry }} \
           --docker-username=AWS \
@@ -32,15 +33,20 @@
           --dry-run=client -o yaml | kubectl apply -f -
       when: is_cloud | default(false) | bool
       changed_when: true
+      args:
+        executable: /bin/bash
 
     - name: Create ConfigMap for project
       ansible.builtin.shell: |
+        set -o pipefail
         kubectl create configmap {{ project_name }}-config \
           --from-literal=DATABASE_URL='{{ database_url }}' \
           --from-literal=NODE_ENV=production \
           --namespace {{ k8s_namespace }} \
           --dry-run=client -o yaml | kubectl apply -f -
       changed_when: true
+      args:
+        executable: /bin/bash
 
     - name: Apply Kubernetes deployment manifest
       ansible.builtin.shell: |
@@ -54,6 +60,7 @@
 
     - name: Apply dynamic Ingress for project
       ansible.builtin.shell: |
+        set -o pipefail
         cat <<EOF | kubectl apply -f -
         apiVersion: networking.k8s.io/v1
         kind: Ingress
@@ -76,6 +83,8 @@
                       number: 80
         EOF
       changed_when: true
+      args:
+        executable: /bin/bash
 
     - name: Wait for deployment rollout
       ansible.builtin.shell: |
