@@ -94,9 +94,10 @@ jobs:
             pnpm --filter ai-service build
             pnpm --filter catalog-service build
 
-            # Run DB migrations
+            # Run DB migrations using production DATABASE_URL from .env
             cd packages/db
-            pnpm exec prisma migrate deploy
+            export DATABASE_URL=$(grep '^DATABASE_URL=' /opt/duckops/.env | cut -d '=' -f2-)
+            DATABASE_URL="$DATABASE_URL" pnpm exec prisma migrate deploy
             cd /opt/duckops
 
             # Reload PM2 with updated env (zero-downtime)
