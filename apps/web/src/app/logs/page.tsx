@@ -404,6 +404,7 @@ function OverviewBar({ metrics }: { metrics: Metric[] }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+export default function LogsPage() {
   const [services, setServices] = useState<ServiceMeta[]>([]);
   const [metrics, setMetrics] = useState<Metric[]>([]);
   const [activeHistory, setActiveHistory] = useState<any[]>([]);
