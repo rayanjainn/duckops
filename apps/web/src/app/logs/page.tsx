@@ -448,7 +448,7 @@ export default function LogsPage() {
   const activeMeta = services.find((s) => s.name === activeService);
 
   return (
-    <div className="min-h-screen bg-surface flex flex-col">
+    <div className="h-full bg-surface flex flex-col">
       <Header
         title="Platform Logs"
         description="Real-time PM2 logs and metrics for all backend services"

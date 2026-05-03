@@ -104,6 +104,9 @@ jobs:
             set -a && source .env && set +a
             pm2 reload ecosystem.config.js --update-env
 
+            # Deploy/update K8s monitoring stack
+            sudo k3s kubectl apply -f /opt/duckops/infra/kubernetes/monitoring/prometheus-grafana.yaml || true
+
             echo "Backend deploy complete: ${{ github.sha }}"
 
   # ── 3. Deploy frontend to Vercel on push to main ───────────────────────────
