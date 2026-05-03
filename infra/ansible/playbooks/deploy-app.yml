@@ -20,11 +20,10 @@
 
     - name: Create Image Pull Secret (ECR)
       shell: |
-        ECR_PASSWORD=$(aws ecr get-login-password --region "${AWS_REGION:-ap-south-1}")
         kubectl create secret docker-registry regcred \
-          --docker-server={{ ecr_registry }} \
+          --docker-server=https://{{ ecr_registry }} \
           --docker-username=AWS \
-          --docker-password="$ECR_PASSWORD" \
+          --docker-password="{{ ecr_token }}" \
           --namespace {{ k8s_namespace }} \
           --dry-run=client -o yaml | kubectl apply -f -
       when: is_cloud | default(false) | bool
@@ -33,7 +32,7 @@
     - name: Create ConfigMap for project
       shell: |
         kubectl create configmap {{ project_name }}-config \
-          --from-literal=DATABASE_URL={{ database_url }} \
+          --from-literal=DATABASE_URL='{{ database_url }}' \
           --from-literal=NODE_ENV=production \
           --namespace {{ k8s_namespace }} \
           --dry-run=client -o yaml | kubectl apply -f -
@@ -61,12 +60,7 @@
             traefik.ingress.kubernetes.io/router.entrypoints: web
         spec:
           rules:
-          - host: >-
-              {% if is_cloud | default(false) | bool -%}
-              {{ project_name }}-{{ github_username | default('duckops') }}-duckops.{{ platform_domain | default('raycode.tech') }}
-              {%- else -%}
-              {{ project_name }}.localhost
-              {%- endif %}
+          - host: "{% if is_cloud | default(false) | bool -%}{{ project_name }}-{{ github_username | default('duckops') }}-duckops.{{ platform_domain | default('raycode.tech') }}{%- else -%}{{ project_name }}.localhost{%- endif %}"
             http:
               paths:
               - path: /

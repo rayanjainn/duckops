@@ -29,7 +29,9 @@ const TERRAFORM_DIR = path.join(
 
 const TERRAFORM_BIN =
   process.env.TERRAFORM_BIN ||
-  "/opt/homebrew/Cellar/terraform/1.5.7/bin/terraform";
+  ["/opt/homebrew/bin/terraform", "/usr/local/bin/terraform", "/usr/bin/terraform"]
+    .find((p) => { try { require("fs").accessSync(p); return true; } catch { return false; } }) ||
+  "terraform";
 
 // Ensure PATH includes homebrew so subprocesses can find tools
 const subEnv = {
