@@ -20,6 +20,9 @@ data:
         metrics_path: '/api/platform/metrics/prometheus'
         static_configs:
           - targets: ['10.42.0.1:4004'] # health-service on host
+      - job_name: 'kube-state-metrics'
+        static_configs:
+          - targets: ['kube-state-metrics.kube-system.svc.cluster.local:8080']
 ---
 apiVersion: apps/v1
 kind: Deployment
