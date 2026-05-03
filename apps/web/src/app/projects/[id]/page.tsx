@@ -43,6 +43,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate, getStatusLabel } from "@/lib/utils";
 import { AI_BASE, healthApi, pipelineApi } from "@/lib/api";
+import { getToken } from "@/lib/auth";
 import type { ProjectStatus } from "@duckops/shared-types";
 import {
   AreaChart,
@@ -684,7 +685,10 @@ function AiBuilderTab({ project, liveBuild }: {
     try {
       const res = await fetch(`${AI_BASE}/api/generate/stream`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+        },
         body: JSON.stringify({ projectId: project.id, prompt: userMsg, sessionId }),
       });
       if (!res.ok || !res.body) {

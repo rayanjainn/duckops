@@ -152,15 +152,22 @@ export interface StackRecommendation {
   reasoning: string;
 }
 
+const aiAxios = axios.create({ baseURL: AI_BASE });
+aiAxios.interceptors.request.use((config) => {
+  const token = getToken();
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
 export const aiApi = {
   recommendStack: (prompt: string): Promise<StackRecommendation> =>
-    axios.post(`${AI_BASE}/api/stack/recommend`, { prompt }).then((r) => r.data),
+    aiAxios.post(`/api/stack/recommend`, { prompt }).then((r) => r.data),
 
   getSessions: (projectId: string) =>
-    axios.get(`${AI_BASE}/api/generate/sessions/${projectId}`).then((r) => r.data),
+    aiAxios.get(`/api/generate/sessions/${projectId}`).then((r) => r.data),
 
   getMessages: (projectId: string, sessionId: string) =>
-    axios.get(`${AI_BASE}/api/generate/sessions/${projectId}/${sessionId}`).then((r) => r.data),
+    aiAxios.get(`/api/generate/sessions/${projectId}/${sessionId}`).then((r) => r.data),
 };
 
 export interface BuildStage {
