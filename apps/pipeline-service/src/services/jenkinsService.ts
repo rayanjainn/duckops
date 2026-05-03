@@ -216,7 +216,8 @@ ${buildStage}
                     kubectl set image deployment/\${IMAGE_NAME} \\
                       \${IMAGE_NAME}=${deployImage} \\
                       -n \${NAMESPACE} --kubeconfig=\${KUBECONFIG}
-                    kubectl rollout status deployment/\${IMAGE_NAME} -n \${NAMESPACE} --timeout=120s --kubeconfig=\${KUBECONFIG}
+                    kubectl rollout restart deployment/\${IMAGE_NAME} -n \${NAMESPACE} --kubeconfig=\${KUBECONFIG}
+                    kubectl rollout status deployment/\${IMAGE_NAME} -n \${NAMESPACE} --timeout=180s --kubeconfig=\${KUBECONFIG}
                 """
             }
         }
