@@ -8,7 +8,7 @@ import helmet from "helmet";
 import { createServer } from "http";
 import { Server as SocketServer } from "socket.io";
 
-import { healthRouter, logsRouter } from "./routes/health";
+import { healthRouter, logsRouter, platformRouter } from "./routes/health";
 import { errorHandler } from "./middleware/errorHandler";
 import { startHealthCheckCron } from "./services/healthCheckService";
 import { createLogger, httpLogger } from "@duckops/shared-utils";
@@ -30,6 +30,7 @@ app.get("/health", (_req, res) => {
 
 app.use("/api/health", healthRouter);
 app.use("/api/logs", logsRouter);
+app.use("/api/platform", platformRouter);
 
 app.use(errorHandler);
 

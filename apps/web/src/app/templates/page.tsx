@@ -44,6 +44,7 @@ export default function TemplatesPage() {
     { key: "FRAMEWORK", label: "Frameworks" },
     { key: "DATABASE", label: "Databases" },
     { key: "ORM", label: "ORMs & Query Layers" },
+    { key: "PACKAGE_MANAGER", label: "Package Managers" },
   ] as const;
 
   return (

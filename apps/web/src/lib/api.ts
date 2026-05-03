@@ -85,6 +85,16 @@ export const healthApi = {
       .then((r) => r.data),
 };
 
+export const platformApi = {
+  getMetrics: () =>
+    healthAxios.get("/api/platform/metrics").then((r) => r.data as {
+      services: { name: string; label: string; port: number }[];
+      metrics: { name: string; status: string; cpu: number; memoryBytes: number; restarts: number; uptime: number; pid: number }[];
+    }),
+  logsUrl: (serviceName: string) =>
+    `${HEALTH_BASE}/api/platform/logs/${serviceName}?token=${getToken()}`,
+};
+
 const pipelineAxios = axios.create({ baseURL: PIPELINE_BASE });
 pipelineAxios.interceptors.request.use((config) => {
   const token = getToken();

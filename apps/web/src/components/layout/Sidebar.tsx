@@ -15,6 +15,7 @@ import {
   CreditCard,
   Zap,
   Settings,
+  ScrollText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -26,6 +27,7 @@ const navItems = [
   { href: "/projects", label: "Projects", icon: Folder, exact: true },
   { href: "/projects/new", label: "New Project", icon: Plus, exact: true },
   { href: "/templates", label: "Templates", icon: BookOpen, exact: true },
+  { href: "/logs", label: "All Logs", icon: ScrollText, exact: false },
   { href: "/billing", label: "Billing", icon: CreditCard, exact: true },
   { href: "/settings", label: "Settings", icon: Settings, exact: true },
 ];
