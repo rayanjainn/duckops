@@ -133,10 +133,11 @@ jobs:
             # Build all backend services in parallel using Turborepo (skips web)
             pnpm exec turbo run build --filter=!web
 
-            # Run DB migrations using production DATABASE_URL from .env
+            # Run DB migrations using production DATABASE_URL and DIRECT_URL from .env
             cd packages/db
             export DATABASE_URL=$(grep '^DATABASE_URL=' /opt/duckops/.env | cut -d '=' -f2-)
-            DATABASE_URL="$DATABASE_URL" pnpm exec prisma migrate deploy
+            export DIRECT_URL=$(grep '^DIRECT_URL=' /opt/duckops/.env | cut -d '=' -f2-)
+            DATABASE_URL="$DATABASE_URL" DIRECT_URL="$DIRECT_URL" pnpm exec prisma migrate deploy
             cd /opt/duckops
 
             # Reload PM2 with updated env (zero-downtime)
