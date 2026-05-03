@@ -1,9 +1,18 @@
-variable "name"      { type = string }
+variable "name" { type = string }
 variable "namespace" { type = string }
-variable "image"     { type = string }
-variable "port"      { type = number; default = 3000 }
-variable "replicas"  { type = number; default = 1 }
-variable "env"       { type = map(string); default = {} }
+variable "image" { type = string }
+variable "port" {
+  type    = number
+  default = 3000
+}
+variable "replicas" {
+  type    = number
+  default = 1
+}
+variable "env" {
+  type    = map(string)
+  default = {}
+}
 
 resource "kubernetes_deployment" "this" {
   metadata {
@@ -29,7 +38,10 @@ resource "kubernetes_deployment" "this" {
             }
           }
           readiness_probe {
-            http_get { path = "/health"; port = var.port }
+            http_get {
+              path = "/health"
+              port = var.port
+            }
             initial_delay_seconds = 5
             period_seconds        = 10
           }
@@ -40,10 +52,16 @@ resource "kubernetes_deployment" "this" {
 }
 
 resource "kubernetes_service" "this" {
-  metadata { name = var.name; namespace = var.namespace }
+  metadata {
+    name      = var.name
+    namespace = var.namespace
+  }
   spec {
     selector = { app = var.name }
-    port { port = 80; target_port = var.port }
+    port {
+      port        = 80
+      target_port = var.port
+    }
     type = "ClusterIP"
   }
 }

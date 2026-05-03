@@ -1,5 +1,8 @@
 variable "name" { type = string }
-variable "labels" { type = map(string); default = {} }
+variable "labels" {
+  type    = map(string)
+  default = {}
+}
 
 resource "kubernetes_namespace" "this" {
   metadata {

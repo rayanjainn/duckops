@@ -10,17 +10,20 @@
     database_url: "{{ database_url }}"
     registry: "k3d-duckops-registry:5111"
     app_port: 3000
-    ingress_host: "{{ (project_name + '-' + (github_username | default('duckops')) + '-duckops.' + (platform_domain | default('raycode.tech'))) if (is_cloud | default(false) | bool) else (project_name + '.localhost') }}"
+    ingress_host: >-
+      {{ (project_name + '-' + (github_username | default('duckops')) + '-duckops.' + (platform_domain | default('raycode.tech')))
+      if (is_cloud | default(false) | bool) else (project_name + '.localhost') }}
 
   tasks:
     - name: Ensure namespace exists
-      shell: |
+      ansible.builtin.shell: |
         kubectl get namespace {{ k8s_namespace }} 2>/dev/null || \
         kubectl create namespace {{ k8s_namespace }}
-      changed_when: true
+      register: ns_check
+      changed_when: "'created' in ns_check.stdout"
 
     - name: Create Image Pull Secret (ECR)
-      shell: |
+      ansible.builtin.shell: |
         kubectl create secret docker-registry regcred \
           --docker-server={{ ecr_registry }} \
           --docker-username=AWS \
@@ -28,29 +31,29 @@
           --namespace {{ k8s_namespace }} \
           --dry-run=client -o yaml | kubectl apply -f -
       when: is_cloud | default(false) | bool
-      ignore_errors: true
+      changed_when: true
 
     - name: Create ConfigMap for project
-      shell: |
+      ansible.builtin.shell: |
         kubectl create configmap {{ project_name }}-config \
           --from-literal=DATABASE_URL='{{ database_url }}' \
           --from-literal=NODE_ENV=production \
           --namespace {{ k8s_namespace }} \
           --dry-run=client -o yaml | kubectl apply -f -
-      ignore_errors: true
+      changed_when: true
 
     - name: Apply Kubernetes deployment manifest
-      shell: |
+      ansible.builtin.shell: |
         kubectl apply -f /tmp/duckops-projects/{{ project_name }}/k8s/deployment.yaml
-      ignore_errors: true
+      changed_when: true
 
     - name: Apply Kubernetes service manifest
-      shell: |
+      ansible.builtin.shell: |
         kubectl apply -f /tmp/duckops-projects/{{ project_name }}/k8s/service.yaml
-      ignore_errors: true
+      changed_when: true
 
     - name: Apply dynamic Ingress for project
-      shell: |
+      ansible.builtin.shell: |
         cat <<EOF | kubectl apply -f -
         apiVersion: networking.k8s.io/v1
         kind: Ingress
@@ -72,11 +75,11 @@
                     port:
                       number: 80
         EOF
-      ignore_errors: true
+      changed_when: true
 
     - name: Wait for deployment rollout
-      shell: |
+      ansible.builtin.shell: |
         kubectl rollout status deployment/{{ project_name }} \
           -n {{ k8s_namespace }} \
           --timeout=120s
-      ignore_errors: true
+      changed_when: false
