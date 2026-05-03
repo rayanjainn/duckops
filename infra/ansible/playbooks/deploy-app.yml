@@ -20,10 +20,11 @@
 
     - name: Create Image Pull Secret (ECR)
       shell: |
+        ECR_PASSWORD=$(aws ecr get-login-password --region "${AWS_REGION:-ap-south-1}")
         kubectl create secret docker-registry regcred \
           --docker-server={{ ecr_registry }} \
           --docker-username=AWS \
-          --docker-password={{ ecr_token }} \
+          --docker-password="$ECR_PASSWORD" \
           --namespace {{ k8s_namespace }} \
           --dry-run=client -o yaml | kubectl apply -f -
       when: is_cloud | default(false) | bool
