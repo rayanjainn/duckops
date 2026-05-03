@@ -993,7 +993,7 @@ data:
           "targets": [
             {
               "datasource": {"type": "prometheus", "uid": "${datasource}"},
-              "expr": "kube_pod_status_phase",
+              "expr": "kube_pod_status_phase == 1",
               "legendFormat": "{{pod}}",
               "refId": "A",
               "instant": true,
