@@ -16,28 +16,39 @@ export const authRouter = Router();
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 
+// In-memory OAuth state store with 10-minute TTL (no Redis dependency)
+const oauthStates = new Map<string, number>();
+setInterval(() => {
+  const cutoff = Date.now() - 10 * 60 * 1000;
+  for (const [state, ts] of oauthStates) if (ts < cutoff) oauthStates.delete(state);
+}, 60_000);
+
 // GET /api/auth/github — redirect to GitHub
 authRouter.get("/github", (req, res) => {
   const state = randomBytes(16).toString("hex");
-  // In production store state in redis/session to verify on callback
+  oauthStates.set(state, Date.now());
   res.redirect(getGitHubAuthUrl(state));
 });
 
 // GET /api/auth/github/callback — GitHub redirects here
 authRouter.get("/github/callback", async (req, res, next) => {
   try {
-    const { code, error } = req.query as Record<string, string>;
+    const { code, error, state } = req.query as Record<string, string>;
 
     if (error || !code) {
       return res.redirect(`${FRONTEND_URL}/login?error=github_denied`);
     }
 
+    // Validate OAuth state to prevent CSRF
+    if (!state || !oauthStates.has(state)) {
+      return res.redirect(`${FRONTEND_URL}/login?error=invalid_state`);
+    }
+    oauthStates.delete(state);
+
     const accessToken = await exchangeCodeForToken(code);
     const githubUser = await getGitHubUser(accessToken);
     const { jwt } = await upsertUserAndCreateSession(githubUser, accessToken);
 
-    // Redirect to frontend with token in query param
-    // Frontend stores it in localStorage then strips from URL
     res.redirect(`${FRONTEND_URL}/auth/callback?token=${jwt}`);
   } catch (err) {
     next(err);

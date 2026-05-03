@@ -26,6 +26,10 @@ async function getCrumb(): Promise<Record<string, string>> {
   }
 }
 
+function escapeXml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+}
+
 async function upsertGitHubCredential(
   credentialId: string,
   username: string,
@@ -33,10 +37,10 @@ async function upsertGitHubCredential(
 ): Promise<void> {
   const credentialXml = `<com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl>
   <scope>GLOBAL</scope>
-  <id>${credentialId}</id>
-  <description>GitHub token for ${username} (auto-created by DuckOps)</description>
-  <username>${username}</username>
-  <password>${token}</password>
+  <id>${escapeXml(credentialId)}</id>
+  <description>GitHub token for ${escapeXml(username)} (auto-created by DuckOps)</description>
+  <username>${escapeXml(username)}</username>
+  <password>${escapeXml(token)}</password>
 </com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl>`;
 
   const crumb = await getCrumb();
@@ -228,6 +232,7 @@ ${buildStage}
             sh """
                 curl -sf -X POST ${callbackUrl}/api/pipelines/deployments \\
                   -H 'Content-Type: application/json' \\
+                  -H "X-Jenkins-Secret: \${JENKINS_CALLBACK_SECRET}" \\
                   -d '{"projectName":"\${IMAGE_NAME}","buildNumber":"\${BUILD_NUMBER}","imageTag":"${isCloud ? `${ecrRegistry}/${ecrImageName}:\${BUILD_NUMBER}` : `\${HOST_REGISTRY}/\${IMAGE_NAME}:\${BUILD_NUMBER}`}","status":"SUCCESS"}' \\
                   || true
             """
@@ -237,6 +242,7 @@ ${buildStage}
             sh """
                 curl -sf -X POST ${callbackUrl}/api/pipelines/deployments \\
                   -H 'Content-Type: application/json' \\
+                  -H "X-Jenkins-Secret: \${JENKINS_CALLBACK_SECRET}" \\
                   -d '{"projectName":"\${IMAGE_NAME}","buildNumber":"\${BUILD_NUMBER}","imageTag":"${isCloud ? `${ecrRegistry}/${ecrImageName}:\${BUILD_NUMBER}` : `\${HOST_REGISTRY}/\${IMAGE_NAME}:\${BUILD_NUMBER}`}","status":"FAILED"}' \\
                   || true
             """

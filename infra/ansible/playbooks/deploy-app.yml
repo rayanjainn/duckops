@@ -10,6 +10,7 @@
     database_url: "{{ database_url }}"
     registry: "k3d-duckops-registry:5111"
     app_port: 3000
+    ingress_host: "{{ (project_name + '-' + (github_username | default('duckops')) + '-duckops.' + (platform_domain | default('raycode.tech'))) if (is_cloud | default(false) | bool) else (project_name + '.localhost') }}"
 
   tasks:
     - name: Ensure namespace exists
@@ -60,7 +61,7 @@
             traefik.ingress.kubernetes.io/router.entrypoints: web
         spec:
           rules:
-          - host: "{% if is_cloud | default(false) | bool -%}{{ project_name }}-{{ github_username | default('duckops') }}-duckops.{{ platform_domain | default('raycode.tech') }}{%- else -%}{{ project_name }}.localhost{%- endif %}"
+          - host: "{{ ingress_host }}"
             http:
               paths:
               - path: /

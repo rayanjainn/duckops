@@ -17,6 +17,7 @@ data:
         static_configs:
           - targets: ['localhost:9090']
       - job_name: 'duckops-services'
+        metrics_path: '/api/platform/metrics/prometheus'
         static_configs:
           - targets: ['13.204.92.146:4004'] # health-service on host
 ---
@@ -61,6 +62,172 @@ spec:
     - port: 9090
       targetPort: 9090
 ---
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: monitoring
+data:
+  prometheus.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+        editable: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards-config
+  namespace: monitoring
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: duckops
+        folder: DuckOps
+        type: file
+        options:
+          path: /var/lib/grafana/dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-services
+  namespace: monitoring
+data:
+  services.json: |
+    {
+      "title": "DuckOps Services",
+      "uid": "duckops-services",
+      "refresh": "30s",
+      "time": {"from": "now-1h", "to": "now"},
+      "panels": [
+        {
+          "id": 1, "type": "timeseries", "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+          "title": "CPU Usage %",
+          "targets": [{"datasource": "Prometheus", "expr": "duckops_service_cpu{}", "legendFormat": "{{service}}"}]
+        },
+        {
+          "id": 2, "type": "timeseries", "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+          "title": "Memory Usage MB",
+          "targets": [{"datasource": "Prometheus", "expr": "duckops_service_memory_mb{}", "legendFormat": "{{service}}"}]
+        },
+        {
+          "id": 3, "type": "stat", "gridPos": {"x": 0, "y": 8, "w": 6, "h": 4},
+          "title": "Services Online",
+          "targets": [{"datasource": "Prometheus", "expr": "count(duckops_service_uptime_seconds > 0)"}],
+          "options": {"colorMode": "background", "thresholds": {"steps": [{"value": 0, "color": "red"}, {"value": 5, "color": "green"}]}}
+        },
+        {
+          "id": 4, "type": "table", "gridPos": {"x": 6, "y": 8, "w": 18, "h": 4},
+          "title": "Service Uptime",
+          "targets": [{"datasource": "Prometheus", "expr": "duckops_service_uptime_seconds{}", "legendFormat": "{{service}}", "instant": true}]
+        },
+        {
+          "id": 5, "type": "timeseries", "gridPos": {"x": 0, "y": 12, "w": 24, "h": 8},
+          "title": "HTTP Requests / 5m",
+          "targets": [{"datasource": "Prometheus", "expr": "rate(duckops_http_requests_total{}[5m])", "legendFormat": "{{service}} {{method}} {{route}}"}]
+        },
+        {
+          "id": 6, "type": "timeseries", "gridPos": {"x": 0, "y": 20, "w": 24, "h": 8},
+          "title": "Error Rate / 5m",
+          "targets": [{"datasource": "Prometheus", "expr": "rate(duckops_http_errors_total{}[5m])", "legendFormat": "{{service}} {{status}}"}],
+          "fieldConfig": {"defaults": {"color": {"fixedColor": "red", "mode": "fixed"}}}
+        }
+      ]
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-k8s
+  namespace: monitoring
+data:
+  k8s.json: |
+    {
+      "title": "DuckOps Kubernetes",
+      "uid": "duckops-k8s",
+      "refresh": "30s",
+      "time": {"from": "now-1h", "to": "now"},
+      "panels": [
+        {
+          "id": 1, "type": "table", "gridPos": {"x": 0, "y": 0, "w": 24, "h": 10},
+          "title": "Pod Status",
+          "targets": [{"datasource": "Prometheus", "expr": "kube_pod_status_phase{}", "legendFormat": "{{pod}} - {{phase}}", "instant": true}]
+        },
+        {
+          "id": 2, "type": "timeseries", "gridPos": {"x": 0, "y": 10, "w": 12, "h": 8},
+          "title": "Pod Restarts",
+          "targets": [{"datasource": "Prometheus", "expr": "kube_pod_container_status_restarts_total{}", "legendFormat": "{{pod}}"}]
+        },
+        {
+          "id": 3, "type": "stat", "gridPos": {"x": 12, "y": 10, "w": 12, "h": 8},
+          "title": "Running Pods",
+          "targets": [{"datasource": "Prometheus", "expr": "count(kube_pod_status_phase{phase=\"Running\"})"}]
+        }
+      ]
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-business
+  namespace: monitoring
+data:
+  business.json: |
+    {
+      "title": "DuckOps Business Metrics",
+      "uid": "duckops-business",
+      "refresh": "5m",
+      "time": {"from": "now-24h", "to": "now"},
+      "panels": [
+        {
+          "id": 1, "type": "stat", "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+          "title": "Total Projects",
+          "targets": [{"datasource": "Prometheus", "expr": "duckops_projects_total"}],
+          "options": {"colorMode": "background"}
+        },
+        {
+          "id": 2, "type": "stat", "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+          "title": "Total Users",
+          "targets": [{"datasource": "Prometheus", "expr": "duckops_users_total"}],
+          "options": {"colorMode": "background"}
+        },
+        {
+          "id": 3, "type": "stat", "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+          "title": "Deployments Today",
+          "targets": [{"datasource": "Prometheus", "expr": "duckops_deployments_today"}],
+          "options": {"colorMode": "background"}
+        },
+        {
+          "id": 4, "type": "stat", "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+          "title": "AI Prompts Today",
+          "targets": [{"datasource": "Prometheus", "expr": "duckops_ai_prompts_today"}],
+          "options": {"colorMode": "background"}
+        },
+        {
+          "id": 5, "type": "timeseries", "gridPos": {"x": 0, "y": 4, "w": 24, "h": 8},
+          "title": "Projects Created Over Time",
+          "targets": [{"datasource": "Prometheus", "expr": "duckops_projects_total", "legendFormat": "Projects"}]
+        },
+        {
+          "id": 6, "type": "piechart", "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+          "title": "Projects by Framework",
+          "targets": [{"datasource": "Prometheus", "expr": "duckops_projects_by_framework{}", "legendFormat": "{{framework}}", "instant": true}]
+        },
+        {
+          "id": 7, "type": "piechart", "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8},
+          "title": "Deployments by Status",
+          "targets": [{"datasource": "Prometheus", "expr": "duckops_deployments_by_status{}", "legendFormat": "{{status}}", "instant": true}]
+        }
+      ]
+    }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -86,6 +253,36 @@ spec:
               value: "duckops123"
             - name: GF_SERVER_ROOT_URL
               value: "https://grafana.raycode.tech"
+          volumeMounts:
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+            - name: dashboards-config
+              mountPath: /etc/grafana/provisioning/dashboards
+            - name: dashboard-services
+              mountPath: /var/lib/grafana/dashboards/services.json
+              subPath: services.json
+            - name: dashboard-k8s
+              mountPath: /var/lib/grafana/dashboards/k8s.json
+              subPath: k8s.json
+            - name: dashboard-business
+              mountPath: /var/lib/grafana/dashboards/business.json
+              subPath: business.json
+      volumes:
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+        - name: dashboards-config
+          configMap:
+            name: grafana-dashboards-config
+        - name: dashboard-services
+          configMap:
+            name: grafana-dashboard-services
+        - name: dashboard-k8s
+          configMap:
+            name: grafana-dashboard-k8s
+        - name: dashboard-business
+          configMap:
+            name: grafana-dashboard-business
 ---
 apiVersion: v1
 kind: Service

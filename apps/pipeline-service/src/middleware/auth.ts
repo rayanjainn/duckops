@@ -22,6 +22,16 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
 }
 
+// Internal service-to-service auth — validates X-Internal-Secret header
+export function requireInternalAuth(req: Request, res: Response, next: NextFunction) {
+  const secret = process.env.INTERNAL_API_SECRET || process.env.JWT_SECRET || "duckops-dev-secret-change-in-prod";
+  const provided = req.headers["x-internal-secret"] as string | undefined;
+  if (!provided || provided !== secret) {
+    return res.status(401).json({ error: "Internal authentication required" });
+  }
+  next();
+}
+
 // Looser variant — attaches user if token present but doesn't block if missing
 export async function optionalAuth(req: Request, _res: Response, next: NextFunction) {
   const token = req.headers.authorization?.startsWith("Bearer ")

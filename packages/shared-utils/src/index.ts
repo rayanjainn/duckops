@@ -252,5 +252,5 @@ export function sleep(ms: number): Promise<void> {
  */
 export function stripAnsi(str: string): string {
   // eslint-disable-next-line no-control-regex
-  return str.replace(/\x1B\[[0-9;]*[mGKHFABCDJns]|\x1B\([0-9A-Z]|\x1B[=>]|\r/g, "");
+  return str.replace(/\x1B\[[\x30-\x3F]*[\x20-\x2F]*[\x40-\x7E]|\x1B[\x20-\x2F]*[\x40-\x5F]|\x9B[\x30-\x3F]*[\x20-\x2F]*[\x40-\x7E]|\r/g, "");
 }

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireInternalAuth } from "../middleware/auth";
 import {
   createPipeline,
   triggerPipelineBuild,
@@ -25,7 +25,7 @@ const createSchema = z.object({
 });
 
 // POST /api/pipelines — internal (provisioning-service calls this, no user auth)
-pipelineRouter.post("/", async (req, res, next) => {
+pipelineRouter.post("/", requireInternalAuth, async (req, res, next) => {
   try {
     const data = createSchema.parse(req.body);
     const pipeline = await createPipeline(data);
@@ -104,7 +104,7 @@ pipelineRouter.post("/project/:projectId/sync-deployments", requireAuth, async (
 });
 
 // POST /api/pipelines/project/:projectId/trigger — internal (ai-service calls this)
-pipelineRouter.post("/project/:projectId/trigger", async (req, res, next) => {
+pipelineRouter.post("/project/:projectId/trigger", requireInternalAuth, async (req, res, next) => {
   try {
     const pipeline = await getPipelineByProject(req.params.projectId as string);
     if (!pipeline) { res.status(404).json({ error: "Pipeline not found for project" }); return; }
@@ -146,15 +146,24 @@ pipelineRouter.delete("/:id", requireAuth, async (req, res, next) => {
 });
 
 // DELETE /api/pipelines/project/:projectId — internal (provisioning-service)
-pipelineRouter.delete("/project/:projectId", async (req, res, next) => {
+pipelineRouter.delete("/project/:projectId", requireInternalAuth, async (req, res, next) => {
   try {
     await deletePipelineByProjectId(req.params.projectId as string);
     res.status(204).send();
   } catch (err) { next(err); }
 });
 
-// POST /api/pipelines/deployments — called by Jenkinsfile post block (no user auth)
-pipelineRouter.post("/deployments", async (req, res, next) => {
+// POST /api/pipelines/deployments — called by Jenkinsfile post block
+// Accepts X-Internal-Secret header OR X-Jenkins-Secret (set as Jenkins global env var)
+pipelineRouter.post("/deployments", (req, res, next) => {
+  const secret = process.env.INTERNAL_API_SECRET || process.env.JWT_SECRET || "duckops-dev-secret-change-in-prod";
+  const jenkinsSecret = process.env.JENKINS_CALLBACK_SECRET || secret;
+  const provided = (req.headers["x-internal-secret"] || req.headers["x-jenkins-secret"]) as string | undefined;
+  if (!provided || (provided !== secret && provided !== jenkinsSecret)) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+  next();
+}, async (req, res, next) => {
   try {
     const { projectName, buildNumber, imageTag, status, buildLogs, deployLogs } = req.body as {
       projectName: string; buildNumber: string; imageTag: string;

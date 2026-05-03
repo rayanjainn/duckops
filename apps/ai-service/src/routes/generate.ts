@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { requireAuth } from "../middleware/auth";
 import { z } from "zod";
 import fs from "fs/promises";
 import path from "path";
@@ -23,7 +24,7 @@ const generateSchema = z.object({
 
 // ─── Session endpoints ──────────────────────────────────────────────────────
 
-generateRouter.get("/sessions/:projectId", async (req, res) => {
+generateRouter.get("/sessions/:projectId", requireAuth, async (req, res) => {
   try {
     const sessions = await (prisma as any).aiSession.findMany({
       where: { projectId: req.params.projectId },
@@ -37,7 +38,7 @@ generateRouter.get("/sessions/:projectId", async (req, res) => {
   }
 });
 
-generateRouter.get("/sessions/:projectId/:sessionId", async (req, res) => {
+generateRouter.get("/sessions/:projectId/:sessionId", requireAuth, async (req, res) => {
   try {
     const messages = await (prisma as any).aiMessage.findMany({
       where: { sessionId: req.params.sessionId },
@@ -68,7 +69,8 @@ generateRouter.post("/stream", async (req, res, next) => {
 
     // --- Billing / AI Prompt Limits ---
     // Skip quota check for internal server-to-server calls (provisioning triggering initial prompt)
-    const isInternal = req.headers["x-internal-call"] === process.env.JWT_SECRET;
+    const internalSecret = process.env.INTERNAL_API_SECRET || process.env.JWT_SECRET;
+    const isInternal = req.headers["x-internal-call"] === internalSecret;
     const user = project.user as any;
     if (!isInternal && user.plan === "FREE" && !user.devMode) {
       const now = new Date();
@@ -187,8 +189,10 @@ generateRouter.post("/stream", async (req, res, next) => {
         } catch { /* new model, may not be migrated yet */ }
 
         const pipelineUrl = process.env.PIPELINE_SERVICE_URL || "http://localhost:4003";
+        const internalSecret = process.env.INTERNAL_API_SECRET || process.env.JWT_SECRET || "duckops-dev-secret-change-in-prod";
         fetch(`${pipelineUrl}/api/pipelines/project/${project.id}/trigger`, {
           method: "POST",
+          headers: { "X-Internal-Secret": internalSecret },
         }).catch((e) => logger.warn(`Trigger build failed: ${e.message}`));
       } else {
         logger.warn("No changes were committed (nothing staged)");

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "@duckops/db";
 import { z } from "zod";
 import { validate } from "../middleware/validate";
+import { requireAuth } from "../middleware/auth";
 import { NotFoundError } from "@duckops/shared-utils";
 
 export const templateRouter = Router();
@@ -100,7 +101,7 @@ const createTemplateSchema = z.object({
   compatibleWith: z.record(z.array(z.string())).default({}),
 });
 
-templateRouter.post("/", validate(createTemplateSchema), async (req, res, next) => {
+templateRouter.post("/", requireAuth, validate(createTemplateSchema), async (req, res, next) => {
   try {
     const option = await prisma.templateOption.create({ data: req.body });
     res.status(201).json(option);

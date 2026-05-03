@@ -218,9 +218,10 @@ export async function provisionProject(
   await updateStatus(projectId, ProjectStatus.DEPLOYING, "Creating CI/CD pipeline...", "Store GitHub credentials in Jenkins");
 
   try {
+    const internalSecret = process.env.INTERNAL_API_SECRET || process.env.JWT_SECRET || "duckops-dev-secret-change-in-prod";
     const pipelineRes = await fetch(`${PIPELINE_SERVICE}/api/pipelines`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-Internal-Secret": internalSecret },
       body: JSON.stringify({
         projectId,
         gitRepoUrl: repoResult.repoUrl,
@@ -240,6 +241,7 @@ export async function provisionProject(
     try {
       const triggerRes = await fetch(`${PIPELINE_SERVICE}/api/pipelines/project/${projectId}/trigger`, {
         method: "POST",
+        headers: { "X-Internal-Secret": internalSecret },
       });
       if (triggerRes.ok) {
         logger.info(`Initial Jenkins build triggered for project ${projectId}`);
@@ -272,7 +274,7 @@ export async function provisionProject(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-internal-call": process.env.JWT_SECRET || "",
+        "x-internal-call": process.env.INTERNAL_API_SECRET || process.env.JWT_SECRET || "",
       },
       body: JSON.stringify({ projectId, prompt: input.aiPrompt }),
     })
@@ -401,7 +403,10 @@ export async function deleteProject(id: string, githubAccessToken?: string) {
       : fs.rm(`/tmp/duckops-projects/${safeImageName}`, { recursive: true, force: true }).catch(() => {}),
 
     // 5. Delete Jenkins pipeline via pipeline service
-    fetch(`${PIPELINE_SERVICE}/api/pipelines/project/${id}`, { method: "DELETE" }).catch(logger.error),
+    fetch(`${PIPELINE_SERVICE}/api/pipelines/project/${id}`, {
+      method: "DELETE",
+      headers: { "X-Internal-Secret": process.env.INTERNAL_API_SECRET || process.env.JWT_SECRET || "duckops-dev-secret-change-in-prod" },
+    }).catch(logger.error),
   ]);
 
   // 6. Delete child DB records then project (must be sequential — FK constraints)

@@ -266,5 +266,6 @@ model ServiceMetric {
   status      String
   timestamp   DateTime @default(now())
 
+  @@map("ServiceMetric")
   @@index([serviceName, timestamp])
 }

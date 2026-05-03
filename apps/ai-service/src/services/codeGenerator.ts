@@ -281,7 +281,7 @@ export async function commitAndPush(params: {
   const git = simpleGit(params.repoDir);
 
   await git.addConfig("user.email", "rayansjain29@gmail.com");
-  await git.addConfig("user.name", "DuckOps AI");
+  await git.addConfig("user.name", "DuckOps");
 
   if (params.files.length === 0) {
     logger.warn("commitAndPush called with no files — skipping commit");

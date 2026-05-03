@@ -229,15 +229,44 @@ const statusGauge = new Gauge({
   labelNames: ["service"],
 });
 
+const projectsGauge = new Gauge({ name: "duckops_projects_total", help: "Total number of projects" });
+const usersGauge = new Gauge({ name: "duckops_users_total", help: "Total number of users" });
+const deploymentsGauge = new Gauge({ name: "duckops_deployments_today", help: "Deployments in the last 24 hours" });
+const aiPromptsGauge = new Gauge({ name: "duckops_ai_prompts_today", help: "AI prompts in the last 24 hours" });
+const projectsByFrameworkGauge = new Gauge({ name: "duckops_projects_by_framework", help: "Projects grouped by framework", labelNames: ["framework"] });
+const deploymentsByStatusGauge = new Gauge({ name: "duckops_deployments_by_status", help: "Deployments grouped by status", labelNames: ["status"] });
+
 platformRouter.get("/metrics/prometheus", async (_req, res) => {
   try {
-    const metrics = await getPm2Metrics();
-    metrics.forEach((m) => {
+    const [pm2Metrics, projectCount, userCount, deployToday, aiToday, byFramework, byStatus] = await Promise.all([
+      getPm2Metrics(),
+      prisma.project.count(),
+      prisma.user.count(),
+      prisma.deployment.count({ where: { startedAt: { gte: new Date(Date.now() - 86400_000) } } }),
+      (prisma as any).aiMessage.count({ where: { role: "user", createdAt: { gte: new Date(Date.now() - 86400_000) } } }).catch(() => 0),
+      prisma.project.groupBy({ by: ["framework"], _count: true }),
+      prisma.deployment.groupBy({ by: ["status"], _count: true }),
+    ]);
+
+    pm2Metrics.forEach((m) => {
       cpuGauge.set({ service: m.name }, m.cpu);
       memGauge.set({ service: m.name }, m.memoryBytes);
       restartGauge.set({ service: m.name }, m.restarts);
       statusGauge.set({ service: m.name }, m.status === "online" ? 1 : 0);
     });
+
+    projectsGauge.set(projectCount);
+    usersGauge.set(userCount);
+    deploymentsGauge.set(deployToday);
+    aiPromptsGauge.set(aiToday as number);
+    projectsByFrameworkGauge.reset();
+    (byFramework as { framework: string; _count: number }[]).forEach((r) =>
+      projectsByFrameworkGauge.set({ framework: r.framework }, r._count),
+    );
+    deploymentsByStatusGauge.reset();
+    (byStatus as { status: string; _count: number }[]).forEach((r) =>
+      deploymentsByStatusGauge.set({ status: r.status }, r._count),
+    );
 
     res.set("Content-Type", register.contentType);
     res.end(await register.metrics());
