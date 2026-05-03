@@ -197,7 +197,7 @@ platformRouter.get("/metrics", requireAuth, async (_req, res) => {
 // GET /api/platform/metrics/history/:service — historical stats for a specific service
 platformRouter.get("/metrics/history/:service", requireAuth, async (req, res) => {
   const history = await prisma.serviceMetric.findMany({
-    where: { serviceName: req.params.service },
+    where: { serviceName: req.params.service as string },
     orderBy: { timestamp: "desc" },
     take: 120, // ~20 minutes of data at 10s intervals
   });
