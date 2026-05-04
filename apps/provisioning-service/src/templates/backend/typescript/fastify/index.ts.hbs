@@ -29,7 +29,7 @@ fastify.get("/api/health", async () => {
 });
 
 fastify.get("/", async () => {
-  return { welcome: "Welcome to {{projectName}}", deployedBy: "DuckOps", routes: ROUTES };
+  return { project: "{{projectName}}", routes: ROUTES };
 });
 
 fastify.get("/api/items", async () => {
