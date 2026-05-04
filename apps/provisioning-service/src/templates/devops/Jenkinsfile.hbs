@@ -21,21 +21,7 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                sh '''
-                    # Ensure pnpm is available — use corepack so no global npm install is needed.
-                    # corepack is bundled with Node 16+ and activates pnpm from package.json#packageManager.
-                    if ! command -v pnpm >/dev/null 2>&1; then
-                        corepack enable
-                        corepack prepare pnpm@latest --activate
-                    fi
-
-                    # Point pnpm at the persistent store so packages are reused across builds.
-                    pnpm config set store-dir "$PNPM_STORE"
-
-                    # Install with frozen lockfile — never mutate lockfile in CI.
-                    # --shamefully-hoist is NOT used: it breaks module resolution and wastes memory.
-                    {{{pmInstall}}}
-                '''
+                sh '{{{pmInstall}}}'
             }
         }
 

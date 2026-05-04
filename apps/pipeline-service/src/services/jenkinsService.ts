@@ -91,14 +91,11 @@ export interface JenkinsPipelineResult {
 }
 
 function pmInstallCmd(pm?: string): string {
-  // Use corepack to activate the package manager — avoids a global npm install
-  // on every build (which re-downloads the binary and spikes memory usage).
-  // pnpm store is pointed at $PNPM_HOME (persistent Jenkins volume) via env var.
   switch (pm) {
-    case "pnpm": return "corepack enable &amp;&amp; corepack prepare pnpm@latest --activate &amp;&amp; pnpm config set store-dir \"${PNPM_HOME:-/var/jenkins_home/.pnpm-store}\" &amp;&amp; pnpm install --frozen-lockfile";
-    case "yarn": return "corepack enable &amp;&amp; corepack prepare yarn@stable --activate &amp;&amp; yarn install --frozen-lockfile";
-    case "bun":  return "npm install -g bun &amp;&amp; bun install --frozen-lockfile";
-    default:     return "npm install";
+    case "pnpm": return "command -v pnpm &gt;/dev/null 2&gt;&amp;1 || npm install -g pnpm@latest &amp;&amp; pnpm install --frozen-lockfile";
+    case "yarn": return "command -v yarn &gt;/dev/null 2&gt;&amp;1 || npm install -g yarn@stable &amp;&amp; yarn install --frozen-lockfile";
+    case "bun":  return "command -v bun &gt;/dev/null 2&gt;&amp;1 || npm install -g bun &amp;&amp; bun install --frozen-lockfile";
+    default:     return "npm ci";
   }
 }
 
