@@ -2,13 +2,13 @@
 
 > **Decisions locked in:**
 > - Region: `ap-south-1` (Mumbai)
-> - Domain: TBD (placeholder: `yourdomain.tech`)
+> - Domain: `raycode.tech` (live, EC2 IP: 13.204.92.146)
 > - Local + Cloud both work simultaneously (2 GitHub OAuth apps)
 > - AI: Ollama cloud API (existing, via API key)
 > - Concurrent users: ~5 (t3.large sufficient)
 > - Jenkins: shared instance
 > - BullMQ + Redis: yes, for AI generation and provisioning queues
-> - URL format: `{project}-{github}-duckops.yourdomain.tech`
+> - URL format: `{project}-{github}-duckops.raycode.tech`
 > - Database: **Neon.tech (free tier Postgres)** — no RDS, no extra AWS cost
 > - All activity stored in DB: Jenkins builds, deployments, commits, generated code, AI sessions
 
@@ -35,8 +35,8 @@ Two distinct contexts run on the same EC2:
         ┌──────────────┐                   ┌────────────────────────────────────────┐
         │ Next.js      │                   │                                        │
         │  (DuckOps    │◄──HTTPS──────────►│  nginx :80/:443                        │
-        │   frontend)  │                   │   ├─ api.yourdomain.tech  → PM2 svcs   │
-        │              │                   │   ├─ *.yourdomain.tech   → K3s Traefik │
+        │   frontend)  │                   │   ├─ api.raycode.tech  → PM2 svcs   │
+        │              │                   │   ├─ *.raycode.tech   → K3s Traefik │
         │ catalog-svc  │                   │   └─ SSL: wildcard Let's Encrypt        │
         │  (Vercel fn) │                   │                                        │
         └──────────────┘                   │  PM2 — DuckOps backends                │
@@ -83,25 +83,25 @@ Two distinct contexts run on the same EC2:
 
 ## Domain Structure
 
-Replace `yourdomain.tech` with your actual domain once confirmed.
+Replace `raycode.tech` with your actual domain once confirmed.
 
 | Subdomain | Points to | Purpose |
 |---|---|---|
-| `app.yourdomain.tech` | Vercel | DuckOps frontend (Next.js) |
-| `api.yourdomain.tech` | EC2 Elastic IP | All DuckOps backend services |
-| `{project}-{github}-duckops.yourdomain.tech` | EC2 → K3s Traefik | User's deployed app |
+| `app.raycode.tech` | Vercel | DuckOps frontend (Next.js) |
+| `api.raycode.tech` | EC2 Elastic IP | All DuckOps backend services |
+| `{project}-{github}-duckops.raycode.tech` | EC2 → K3s Traefik | User's deployed app |
 
 **Example:** User `rayan` creates project `myapp`
-→ App lives at `myapp-rayan-duckops.yourdomain.tech` (HTTPS)
+→ App lives at `myapp-rayan-duckops.raycode.tech` (HTTPS)
 
-**SSL:** Single Certbot wildcard cert `*.yourdomain.tech` — covers all subdomains, auto-renewed every 90 days.
+**SSL:** Single Certbot wildcard cert `*.raycode.tech` — covers all subdomains, auto-renewed every 90 days.
 
 ---
 
 ## URL Format Detail
 
 ```
-{projectName}-{githubUsername}-duckops.yourdomain.tech
+{projectName}-{githubUsername}-duckops.raycode.tech
      ↑               ↑              ↑
   "myapp"          "rayan"     hardcoded suffix
                                 (identifies this is
@@ -136,7 +136,7 @@ mkdir -p /home/rayan/projects/myapp/{manifests,logs}
 # ECR repo: {account}.dkr.ecr.ap-south-1.amazonaws.com/duckops/rayan-myapp
 
 # Traefik IngressRoute created automatically by K3s manifest:
-# myapp-rayan-duckops.yourdomain.tech → svc/rayan-myapp in namespace rayan-myapp
+# myapp-rayan-duckops.raycode.tech → svc/rayan-myapp in namespace rayan-myapp
 ```
 
 ### When a project is deleted
@@ -306,8 +306,8 @@ EC2 t3.large — Ubuntu 24.04 — ap-south-1 — 50GB gp3 SSD — Elastic IP
 ├── Jenkins (CI/CD, same as local)
 ├── Docker (for building images)
 ├── AWS CLI + ECR credential helper
-├── nginx (reverse proxy for api.yourdomain.tech)
-├── Certbot (wildcard SSL cert for *.yourdomain.tech)
+├── nginx (reverse proxy for api.raycode.tech)
+├── Certbot (wildcard SSL cert for *.raycode.tech)
 └── Git
 ```
 
@@ -327,12 +327,12 @@ Available for user pods    ~5.6GB  ✓ (5 users × ~1GB each = fine)
 ## nginx on EC2
 
 ```nginx
-# api.yourdomain.tech — DuckOps platform backends
+# api.raycode.tech — DuckOps platform backends
 server {
     listen 443 ssl;
-    server_name api.yourdomain.tech;
-    ssl_certificate     /etc/letsencrypt/live/yourdomain.tech/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/yourdomain.tech/privkey.pem;
+    server_name api.raycode.tech;
+    ssl_certificate     /etc/letsencrypt/live/raycode.tech/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/raycode.tech/privkey.pem;
 
     location /api/auth        { proxy_pass http://localhost:4002; ... }
     location /api/projects    { proxy_pass http://localhost:4002; ... }
@@ -358,12 +358,12 @@ server {
     }
 }
 
-# *.yourdomain.tech — user-deployed apps → K3s Traefik
+# *.raycode.tech — user-deployed apps → K3s Traefik
 server {
     listen 443 ssl;
     server_name ~^.+-duckops\.yourdomain\.tech$;
-    ssl_certificate     /etc/letsencrypt/live/yourdomain.tech/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/yourdomain.tech/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/raycode.tech/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/raycode.tech/privkey.pem;
 
     location / {
         proxy_pass http://localhost:80;   # Traefik NodePort inside K3s
@@ -392,7 +392,7 @@ CNAME   app                     cname.vercel-dns.com  300
 A       *                       <EC2 Elastic IP>    300   ← wildcard for user apps
 ```
 
-The wildcard `*` A record catches all `{project}-{github}-duckops.yourdomain.tech` subdomains and routes them to EC2 where nginx hands them to K3s Traefik.
+The wildcard `*` A record catches all `{project}-{github}-duckops.raycode.tech` subdomains and routes them to EC2 where nginx hands them to K3s Traefik.
 
 ---
 
@@ -427,7 +427,7 @@ REDIS_URL=redis://localhost:6379       # same, Redis on EC2
 EC2_SSH_HOST=ec2-xx-xx.ap-south-1.compute.amazonaws.com
 EC2_SSH_KEY_PATH=/home/ubuntu/.ssh/duckops-ec2.pem
 DEPLOY_MODE=cloud
-DOMAIN=yourdomain.tech
+DOMAIN=raycode.tech
 AWS_REGION=ap-south-1
 AWS_ACCOUNT_ID=123456789012
 ```
@@ -436,7 +436,7 @@ AWS_ACCOUNT_ID=123456789012
 - Use Neon.tech Postgres instead of local Postgres (just a different `DATABASE_URL`)
 - SSH to EC2 for kubectl/useradd commands (health-service, provisioning-service)
 - Use ECR instead of local registry
-- Build project URLs as `{project}-{github}-duckops.yourdomain.tech`
+- Build project URLs as `{project}-{github}-duckops.raycode.tech`
 
 ---
 
@@ -479,7 +479,7 @@ End users just use the platform — they never touch AWS directly.
 | New page: `/settings` | Profile, usage stats, plan, danger zone (delete account) |
 | Schema | Add `AwsConnection` model |
 | Namespace format | `rayan-myapp` instead of `project-myapp` |
-| URL format | `myapp-rayan-duckops.yourdomain.tech` instead of `myapp.localhost:8080` |
+| URL format | `myapp-rayan-duckops.raycode.tech` instead of `myapp.localhost:8080` |
 
 ---
 
@@ -656,7 +656,7 @@ See the section below.
 - [ ] `DEPLOY_MODE=cloud` branching in provisioning-service
 - [ ] SSH-based `useradd`, project dir creation
 - [ ] Namespace format: `{github}-{project}`
-- [ ] URL format: `{project}-{github}-duckops.yourdomain.tech`
+- [ ] URL format: `{project}-{github}-duckops.raycode.tech`
 - [ ] Full cleanup on project + account delete
 
 ### Phase 4 — Vercel Deployment
