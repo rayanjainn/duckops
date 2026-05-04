@@ -86,15 +86,36 @@ echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkin
 apt-get update -qq
 apt-get install -y jenkins
 
-# Jenkins runs on 8085 to avoid conflicts (systemd drop-in override)
+# Jenkins runs on 8085 to avoid conflicts, with public URL set for correct redirects
 mkdir -p /etc/systemd/system/jenkins.service.d
-cat > /etc/systemd/system/jenkins.service.d/port.conf << 'EOF'
+cat > /etc/systemd/system/jenkins.service.d/override.conf << 'EOF'
 [Service]
 Environment="JENKINS_PORT=8085"
 EOF
 systemctl daemon-reload
 systemctl enable jenkins
 systemctl start jenkins
+
+# Wait for Jenkins to write its config files before patching them
+echo "==> Waiting for Jenkins to start..."
+sleep 30
+
+# Set the public URL so Jenkins generates correct links and redirects
+# when accessed via https://jenkins.raycode.tech (reverse-proxied by nginx)
+JENKINS_LOCATION_CONFIG="/var/lib/jenkins/jenkins.model.JenkinsLocationConfiguration.xml"
+if [ -f "$JENKINS_LOCATION_CONFIG" ]; then
+  sed -i 's|<jenkinsUrl>.*</jenkinsUrl>|<jenkinsUrl>https://jenkins.raycode.tech/</jenkinsUrl>|' "$JENKINS_LOCATION_CONFIG"
+else
+  cat > "$JENKINS_LOCATION_CONFIG" << 'EOF'
+<?xml version='1.1' encoding='UTF-8'?>
+<jenkins.model.JenkinsLocationConfiguration>
+  <adminAddress>address not configured yet &lt;nobody@nowhere&gt;</adminAddress>
+  <jenkinsUrl>https://jenkins.raycode.tech/</jenkinsUrl>
+</jenkins.model.JenkinsLocationConfiguration>
+EOF
+fi
+chown jenkins:jenkins "$JENKINS_LOCATION_CONFIG"
+systemctl restart jenkins
 
 # ── 9. Application directory ─────────────────────────────────────────────────
 mkdir -p /opt/duckops
