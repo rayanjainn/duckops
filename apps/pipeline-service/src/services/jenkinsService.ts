@@ -92,10 +92,10 @@ export interface JenkinsPipelineResult {
 
 function pmInstallCmd(pm?: string): string {
   switch (pm) {
-    case "pnpm": return "command -v pnpm &gt;/dev/null 2&gt;&amp;1 || npm install -g pnpm@latest &amp;&amp; pnpm install --frozen-lockfile";
-    case "yarn": return "command -v yarn &gt;/dev/null 2&gt;&amp;1 || npm install -g yarn@stable &amp;&amp; yarn install --frozen-lockfile";
-    case "bun":  return "command -v bun &gt;/dev/null 2&gt;&amp;1 || npm install -g bun &amp;&amp; bun install --frozen-lockfile";
-    default:     return "npm ci";
+    case "pnpm": return "command -v pnpm &gt;/dev/null 2&gt;&amp;1 || npm install -g pnpm@latest &amp;&amp; pnpm install --no-frozen-lockfile";
+    case "yarn": return "command -v yarn &gt;/dev/null 2&gt;&amp;1 || npm install -g yarn@stable &amp;&amp; yarn install --no-frozen-lockfile";
+    case "bun":  return "command -v bun &gt;/dev/null 2&gt;&amp;1 || npm install -g bun &amp;&amp; bun install";
+    default:     return "npm install";
   }
 }
 
