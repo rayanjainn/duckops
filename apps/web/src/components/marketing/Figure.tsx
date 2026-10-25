@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { memo, useEffect, useRef } from "react";
 import { DUCKOPS_LINE_FIGURE } from "./figureMarkup";
 
 declare global {
@@ -24,9 +24,17 @@ function load(src: string): Promise<void> {
   });
 }
 
-/** The isometric transfer line, drawn by figures/build.mjs, brought to life by its own script. */
-export function PipelineFigure() {
+/**
+ * The isometric transfer line, drawn by figures/build.mjs and brought to life
+ * by its own script. React owns only the empty host: the markup is inserted
+ * once here, so a re-render of the page can never swap out the running figure.
+ */
+export const PipelineFigure = memo(function PipelineFigure() {
+  const host = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    const el = host.current;
+    if (!el) return;
+    if (!el.firstElementChild) el.innerHTML = DUCKOPS_LINE_FIGURE;
     let cancelled = false;
     load("/figures/iso-kit.js")
       .then(() => load("/figures/duckops-line.js"))
@@ -41,7 +49,7 @@ export function PipelineFigure() {
     <>
       <link rel="stylesheet" href="/figures/iso.css" />
       <link rel="stylesheet" href="/figures/duckops-line.css" />
-      <div className="mk-fig" dangerouslySetInnerHTML={{ __html: DUCKOPS_LINE_FIGURE }} />
+      <div ref={host} className="mk-fig" style={{ minHeight: 320 }} />
     </>
   );
-}
+});

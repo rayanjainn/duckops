@@ -10,7 +10,6 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
-  GitBranch,
   GraduationCap,
   CreditCard,
   Zap,
@@ -68,9 +67,8 @@ export function Sidebar() {
       {/* Logo */}
       <div className={cn("flex items-center border-b border-border h-16", collapsed ? "justify-center px-0" : "px-5 gap-3")}>
         <Link href="/projects" className="flex items-center gap-3 shrink-0">
-          <div className="w-8 h-8 rounded-lg bg-amber-600 flex items-center justify-center shrink-0">
-            <GitBranch className="h-4 w-4 text-white" />
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/icon.svg" alt="" width={32} height={32} className="w-8 h-8 rounded-lg shrink-0" />
           {!collapsed && (
             <div>
               <p className="text-sm font-bold text-foreground leading-none">DuckOps</p>

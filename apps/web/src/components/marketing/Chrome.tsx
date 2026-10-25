@@ -2,18 +2,15 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { GitBranch, Moon, Sun, Github } from "lucide-react";
+import { Moon, Sun, Github } from "lucide-react";
 
 export const REPO = "rayanjainn/duckops";
 
 export function Logo({ size = 32 }: { size?: number }) {
   return (
-    <span
-      className="mk-logo inline-flex items-center justify-center rounded-[10px] shrink-0"
-      style={{ width: size, height: size }}
-    >
-      <GitBranch className="text-white" style={{ width: size * 0.5, height: size * 0.5 }} />
-    </span>
+    // The app icon (src/app/icon.svg), drawn as the brand mark.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src="/icon.svg" alt="" width={size} height={size} className="shrink-0 rounded-[9px]" />
   );
 }
 
@@ -44,17 +41,17 @@ function ThemeToggle() {
 
 export function MarketingNav() {
   return (
-    <nav className="fixed top-0 inset-x-0 z-50 mk-glass border-b border-border/60">
+    <nav className="fixed top-0 inset-x-0 z-50 mk-glass border-b">
       <div className="max-w-6xl mx-auto px-5 h-16 flex items-center gap-6">
         <Link href="/" className="flex items-center gap-2.5 font-bold text-foreground">
           <Logo size={30} />
           DuckOps
         </Link>
         <div className="hidden md:flex items-center gap-1 text-sm text-muted-2">
-          <Link href="/#pipeline" className="px-3 py-1.5 rounded-lg hover:text-foreground hover:bg-white/5 transition-colors">How it works</Link>
-          <Link href="/#stacks" className="px-3 py-1.5 rounded-lg hover:text-foreground hover:bg-white/5 transition-colors">Stacks</Link>
-          <Link href="/#architecture" className="px-3 py-1.5 rounded-lg hover:text-foreground hover:bg-white/5 transition-colors">Architecture</Link>
-          <Link href="/#ai" className="px-3 py-1.5 rounded-lg hover:text-foreground hover:bg-white/5 transition-colors">AI builder</Link>
+          <Link href="/#pipeline" className="px-3 py-1.5 rounded-lg hover:text-foreground transition-colors">How it works</Link>
+          <Link href="/#stacks" className="px-3 py-1.5 rounded-lg hover:text-foreground transition-colors">Stacks</Link>
+          <Link href="/#architecture" className="px-3 py-1.5 rounded-lg hover:text-foreground transition-colors">Architecture</Link>
+          <Link href="/#ai" className="px-3 py-1.5 rounded-lg hover:text-foreground transition-colors">AI builder</Link>
         </div>
         <div className="ml-auto flex items-center gap-2">
           <a href={`https://github.com/${REPO}`} aria-label="Source on GitHub" className="hidden sm:grid w-9 h-9 place-items-center rounded-lg border border-border text-muted-2 hover:text-foreground transition-colors">
@@ -107,13 +104,3 @@ export function MarketingFooter() {
   );
 }
 
-/** Slow coloured lights behind the marketing pages. */
-export function Aurora() {
-  return (
-    <div className="mk-aurora" aria-hidden="true">
-      <i />
-      <i />
-      <i />
-    </div>
-  );
-}

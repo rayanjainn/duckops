@@ -39,9 +39,8 @@ export default function LoginPage() {
       {/* Left — branding */}
       <div className="hidden lg:flex flex-1 flex-col justify-between p-12 border-r border-border">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-amber-600 flex items-center justify-center">
-            <GitBranch className="h-4 w-4 text-white" />
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/icon.svg" alt="" width={32} height={32} className="w-8 h-8 rounded-lg shrink-0" />
           <span className="font-bold text-foreground">DuckOps</span>
         </div>
 
@@ -73,9 +72,8 @@ export default function LoginPage() {
       <div className="flex-1 flex flex-col items-center justify-center px-8">
         <div className="w-full max-w-sm space-y-8">
           <div className="lg:hidden flex items-center gap-3 justify-center mb-2">
-            <div className="w-8 h-8 rounded-lg bg-amber-600 flex items-center justify-center">
-              <GitBranch className="h-4 w-4 text-white" />
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/icon.svg" alt="" width={32} height={32} className="w-8 h-8 rounded-lg shrink-0" />
             <span className="font-bold text-foreground text-lg">DuckOps</span>
           </div>
 

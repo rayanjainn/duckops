@@ -7,9 +7,8 @@ import { AppShell } from "@/components/layout/AppShell";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "DuckOps — Internal Developer Platform",
-  description: "Self-service developer platform for cloud-native app provisioning, CI/CD, and monitoring",
-  icons: { icon: "/bot-avatar.png" },
+  title: "DuckOps — pick a stack, get a live app",
+  description: "DuckOps scaffolds your code, creates the repo, deploys to Kubernetes, wires Jenkins CI/CD and starts health checks, with every stage streaming live.",
 };
 
 export default function RootLayout({

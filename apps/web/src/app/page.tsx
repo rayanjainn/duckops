@@ -7,7 +7,7 @@ import {
   ArrowRight, Bot, Boxes, CheckCircle2, Code2, Container, GitBranch, HeartPulse,
   Loader2, Rocket, Server, Sparkles, Terminal, Workflow,
 } from "lucide-react";
-import { Aurora, MarketingFooter, MarketingNav } from "@/components/marketing/Chrome";
+import { MarketingFooter, MarketingNav } from "@/components/marketing/Chrome";
 import { PipelineFigure } from "@/components/marketing/Figure";
 import { Reveal } from "@/components/marketing/Reveal";
 import { useBackendStatus } from "@/lib/useBackendStatus";
@@ -54,7 +54,7 @@ function WizardDemo() {
   const stage = step - 5;
   const building = step >= 5;
   return (
-    <div className="mk-card p-5 md:p-6 w-full max-w-[520px] mx-auto relative overflow-hidden">
+    <div className="mk-card p-5 md:p-6 w-full max-w-[520px] mx-auto relative overflow-hidden shadow-2xl shadow-black/40">
       <div className="flex items-center gap-2 mb-5">
         <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]" />
         <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]" />
@@ -116,7 +116,7 @@ function WizardDemo() {
               );
             })}
             <div className="h-1.5 rounded-full bg-surface-3 overflow-hidden mt-3">
-              <motion.div className="h-full rounded-full bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500" animate={{ width: `${Math.min(100, (Math.max(stage, 0) / 8) * 100)}%` }} transition={{ duration: 0.6 }} />
+              <motion.div className="h-full rounded-full bg-[var(--mk-amber)]" animate={{ width: `${Math.min(100, (Math.max(stage, 0) / 8) * 100)}%` }} transition={{ duration: 0.6 }} />
             </div>
             <AnimatePresence>
               {stage >= 8 && (
@@ -156,7 +156,7 @@ function LiveLog() {
       <div className="p-4 font-mono text-[12.5px] leading-6 min-h-[260px]">
         {LOG.slice(0, shown).map((line, i) => (
           <motion.p key={`${line.t}-${i}`} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3 }}
-            className={line.k === "cmd" ? "text-foreground" : line.k === "dim" ? "text-muted" : line.k === "live" ? "text-emerald-400" : "text-amber-400"}>
+            className={line.k === "cmd" ? "text-foreground" : line.k === "dim" ? "text-muted" : line.k === "live" ? "text-emerald-400" : "text-muted-2"}>
             {line.t}
           </motion.p>
         ))}
@@ -200,21 +200,15 @@ const INFRA = [
 function Architecture() {
   return (
     <svg viewBox="0 0 900 320" className="w-full h-auto" role="img" aria-label="The Next.js frontend talks to an Nginx gateway, which routes to five services. The provisioning service drives GitHub, Terraform with Ansible, and Jenkins, which deploy into the Kubernetes cluster.">
-      <defs>
-        <linearGradient id="mk-node" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#ffc53d" />
-          <stop offset="1" stopColor="#f97316" />
-        </linearGradient>
-      </defs>
-      {SERVICES.map((s) => (
+            {SERVICES.map((s) => (
         <path key={s.name} d={`M260 160 C 310 160, 300 ${s.y}, 360 ${s.y}`} fill="none" stroke="#f59e0b" strokeOpacity=".55" strokeWidth="1.6" className="mk-flowline" />
       ))}
       <path d="M150 160 L 200 160" fill="none" stroke="#f59e0b" strokeOpacity=".7" strokeWidth="1.6" className="mk-flowline" />
       {INFRA.map((n) => (
-        <path key={n.name} d={`M520 100 C 580 100, 580 ${n.y}, 640 ${n.y}`} fill="none" stroke="#38bdf8" strokeOpacity=".6" strokeWidth="1.6" className="mk-flowline" />
+        <path key={n.name} d={`M520 100 C 580 100, 580 ${n.y}, 640 ${n.y}`} fill="none" stroke="#737373" strokeOpacity=".7" strokeWidth="1.4" className="mk-flowline" />
       ))}
       {INFRA.map((n) => (
-        <path key={`${n.name}-k8s`} d={`M800 ${n.y} C 830 ${n.y}, 820 160, 850 160`} fill="none" stroke="#a78bfa" strokeOpacity=".55" strokeWidth="1.6" className="mk-flowline" />
+        <path key={`${n.name}-k8s`} d={`M800 ${n.y} C 830 ${n.y}, 820 160, 850 160`} fill="none" stroke="#737373" strokeOpacity=".5" strokeWidth="1.4" className="mk-flowline" />
       ))}
       <g>
         <rect x="20" y="130" width="130" height="60" rx="14" fill="var(--color-surface-2)" stroke="var(--color-border-2)" />
@@ -222,9 +216,9 @@ function Architecture() {
         <text x="85" y="176" textAnchor="middle" fill="#a8a29e" fontSize="11">wizard · dashboard</text>
       </g>
       <g>
-        <rect x="200" y="125" width="60" height="70" rx="14" fill="url(#mk-node)" />
-        <text x="230" y="157" textAnchor="middle" fill="#1a0f00" fontSize="12" fontWeight="700">Nginx</text>
-        <text x="230" y="174" textAnchor="middle" fill="#1a0f00" fontSize="10">:4000</text>
+        <rect x="200" y="125" width="60" height="70" rx="14" fill="var(--color-surface-2)" stroke="#f59e0b" />
+        <text x="230" y="157" textAnchor="middle" className="fill-foreground" fontSize="12" fontWeight="700">Nginx</text>
+        <text x="230" y="174" textAnchor="middle" fill="#a8a29e" fontSize="10">:4000</text>
       </g>
       {SERVICES.map((s, i) => (
         <motion.g key={s.name} initial={{ opacity: 0, x: -10 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: 0.1 * i, duration: 0.6 }}>
@@ -235,13 +229,13 @@ function Architecture() {
       ))}
       {INFRA.map((n, i) => (
         <motion.g key={n.name} initial={{ opacity: 0, x: 10 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: 0.3 + 0.1 * i, duration: 0.6 }}>
-          <rect x="640" y={n.y - 22} width="160" height="44" rx="12" fill="var(--color-surface-2)" stroke="#38bdf8" strokeOpacity=".6" />
+          <rect x="640" y={n.y - 22} width="160" height="44" rx="12" fill="var(--color-surface-2)" stroke="var(--color-border-2)" />
           <text x="720" y={n.y + 5} textAnchor="middle" className="fill-foreground" fontSize="13" fontWeight="600">{n.name}</text>
         </motion.g>
       ))}
       <g>
-        <circle cx="868" cy="160" r="24" fill="#a78bfa" fillOpacity=".18" stroke="#a78bfa" />
-        <text x="868" y="164" textAnchor="middle" fill="#a78bfa" fontSize="11" fontWeight="700">k8s</text>
+        <circle cx="868" cy="160" r="24" fill="var(--color-surface-2)" stroke="var(--color-border-2)" />
+        <text x="868" y="164" textAnchor="middle" fill="#a8a29e" fontSize="11" fontWeight="700">k8s</text>
       </g>
     </svg>
   );
@@ -252,15 +246,15 @@ function AiDemo() {
   const step = useLoop(6, (s) => (s === 5 ? 2600 : 1300));
   const items = [
     <div key="u" className="self-end max-w-[85%] rounded-2xl rounded-br-md px-4 py-2.5 text-sm mk-btn">Add JWT auth and a /users endpoint</div>,
-    <div key="w" className="text-xs font-mono text-muted flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-violet-400" /> writing src/middleware/auth.ts</div>,
-    <div key="w2" className="text-xs font-mono text-muted flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-violet-400" /> writing src/routes/users.ts</div>,
-    <div key="b" className="max-w-[90%] rounded-2xl rounded-bl-md px-4 py-2.5 text-sm border border-violet-500/25 bg-violet-500/10 text-foreground">Done. I added the middleware, the route and a JWT helper, and committed them.</div>,
+    <div key="w" className="text-xs font-mono text-muted flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-[var(--mk-amber)]" /> writing src/middleware/auth.ts</div>,
+    <div key="w2" className="text-xs font-mono text-muted flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-[var(--mk-amber)]" /> writing src/routes/users.ts</div>,
+    <div key="b" className="max-w-[90%] rounded-2xl rounded-bl-md px-4 py-2.5 text-sm border border-[var(--mk-line-2)] bg-surface text-foreground">Done. I added the middleware, the route and a JWT helper, and committed them.</div>,
     <div key="j" className="text-xs font-mono text-emerald-400 flex items-center gap-2"><GitBranch className="h-3.5 w-3.5" /> committed · Jenkins build #2 running</div>,
   ];
   return (
     <div className="mk-card p-5 flex flex-col gap-3 min-h-[300px]">
       <div className="flex items-center gap-2 pb-3 border-b border-border text-sm font-semibold text-foreground">
-        <span className="w-7 h-7 rounded-lg grid place-items-center bg-violet-500/20"><Bot className="h-4 w-4 text-violet-400" /></span>
+        <span className="w-7 h-7 mk-icon"><Bot className="h-4 w-4" /></span>
         AI builder
         <span className="ml-auto text-[11px] font-normal text-muted">streams as it writes</span>
       </div>
@@ -285,7 +279,6 @@ export default function LandingPage() {
 
   return (
     <div className="mk-page bg-surface text-foreground">
-      <Aurora />
       <MarketingNav />
 
       {/* Hero */}
@@ -311,10 +304,10 @@ export default function LandingPage() {
             </Reveal>
             <Reveal delay={0.24}>
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link href={primaryHref} className="mk-btn inline-flex items-center gap-2 px-6 py-3.5 rounded-xl font-bold text-sm">
+                <Link href={primaryHref} className="mk-btn inline-flex items-center gap-2 px-6 py-3.5 rounded-xl font-semibold text-sm">
                   <Rocket className="h-4 w-4" /> {primaryLabel}
                 </Link>
-                <Link href="#pipeline" className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl font-semibold text-sm border border-border hover:border-amber-500/40 transition-colors">
+                <Link href="#pipeline" className="mk-ghost inline-flex items-center gap-2 px-6 py-3.5 rounded-xl font-semibold text-sm">
                   How it works <ArrowRight className="h-4 w-4" />
                 </Link>
               </div>
@@ -331,12 +324,12 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <div className="mk-marquee border-y border-border py-5" aria-hidden="true">
+      <div className="mk-marquee border-y border-[var(--mk-line)] py-4" aria-hidden="true">
         <div className="mk-marquee-track">
           {[...MARQUEE, ...MARQUEE].map((m, i) => (
-            <span key={`${m}-${i}`} className="inline-flex items-center gap-3 text-muted-2 font-semibold whitespace-nowrap">
-              <span className="w-2 h-2 rotate-45 rounded-[3px] bg-gradient-to-br from-amber-400 to-rose-500" />
+            <span key={`${m}-${i}`} className="inline-flex items-center gap-10 mk-mono text-sm text-muted whitespace-nowrap">
               {m}
+              <span className="text-[var(--mk-line-2)]">/</span>
             </span>
           ))}
         </div>
@@ -359,7 +352,7 @@ export default function LandingPage() {
                 {STAGES.map((s, i) => (
                   <div key={s.name} className="mk-card p-4">
                     <div className="flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-lg grid place-items-center text-[11px] font-bold text-[#1a0f00] mk-logo">{i + 1}</span>
+                      <span className="mk-mono text-[11px] text-muted w-5">0{i + 1}</span>
                       <span className="font-semibold text-sm">{s.name}</span>
                     </div>
                     <p className="mt-2 text-xs text-muted-2">{s.detail}</p>
@@ -375,7 +368,7 @@ export default function LandingPage() {
       </section>
 
       {/* Stacks */}
-      <section id="stacks" className="py-28 px-5 border-t border-border scroll-mt-20">
+      <section id="stacks" className="py-28 px-5 border-t border-[var(--mk-line)] scroll-mt-20">
         <div className="max-w-6xl mx-auto">
           <Reveal className="text-center max-w-2xl mx-auto mb-14">
             <span className="mk-eyebrow">Stacks</span>
@@ -387,8 +380,8 @@ export default function LandingPage() {
               <Reveal key={s.name} delay={i * 0.07}>
                 <div className="mk-card p-6 h-full">
                   <div className="flex items-center justify-between">
-                    <span className="w-11 h-11 rounded-xl grid place-items-center mk-logo"><s.icon className="h-5 w-5 text-white" /></span>
-                    <span className="text-[11px] uppercase tracking-widest text-muted">{s.kind}</span>
+                    <span className="w-10 h-10 mk-icon"><s.icon className="h-[18px] w-[18px]" /></span>
+                    <span className="mk-mono text-[11px] text-muted">{s.kind.toLowerCase()}</span>
                   </div>
                   <h3 className="mt-5 text-xl font-bold">{s.name}</h3>
                   <p className="mt-2 text-sm text-muted-2">{s.meta}</p>
@@ -399,8 +392,8 @@ export default function LandingPage() {
           <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {SHIPS.map((s, i) => (
               <Reveal key={s.title} delay={i * 0.08}>
-                <div className="p-5 rounded-2xl border border-border h-full">
-                  <s.icon className="h-5 w-5 text-amber-500" />
+                <div className="p-5 rounded-2xl border border-[var(--mk-line)] h-full">
+                  <s.icon className="h-5 w-5 text-muted-2" />
                   <p className="mt-3 font-semibold">{s.title}</p>
                   <p className="mt-1 text-sm text-muted-2">{s.body}</p>
                 </div>
@@ -411,7 +404,7 @@ export default function LandingPage() {
       </section>
 
       {/* AI builder */}
-      <section id="ai" className="py-28 px-5 border-t border-border scroll-mt-20">
+      <section id="ai" className="py-28 px-5 border-t border-[var(--mk-line)] scroll-mt-20">
         <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-14 items-center">
           <Reveal from="left">
             <span className="mk-eyebrow">AI builder</span>
@@ -425,7 +418,7 @@ export default function LandingPage() {
       </section>
 
       {/* Architecture */}
-      <section id="architecture" className="py-28 px-5 border-t border-border scroll-mt-20">
+      <section id="architecture" className="py-28 px-5 border-t border-[var(--mk-line)] scroll-mt-20">
         <div className="max-w-6xl mx-auto">
           <Reveal className="text-center max-w-2xl mx-auto mb-12">
             <span className="mk-eyebrow">Architecture</span>
@@ -441,7 +434,7 @@ export default function LandingPage() {
       </section>
 
       {/* CTA */}
-      <section className="py-28 px-5 border-t border-border">
+      <section className="py-28 px-5 border-t border-[var(--mk-line)]">
         <Reveal from="zoom">
           <div className="max-w-4xl mx-auto mk-card p-10 md:p-14 text-center relative overflow-hidden">
             <h2 className="text-4xl md:text-5xl font-bold tracking-tight">
@@ -452,10 +445,10 @@ export default function LandingPage() {
               {offline ? "Run DuckOps on your own machine with one setup script." : "Sign in with GitHub and get your first project running on Kubernetes."}
             </p>
             <div className="mt-8 flex flex-wrap justify-center gap-3">
-              <Link href={primaryHref} className="mk-btn inline-flex items-center gap-2 px-7 py-3.5 rounded-xl font-bold text-sm">
+              <Link href={primaryHref} className="mk-btn inline-flex items-center gap-2 px-7 py-3.5 rounded-xl font-semibold text-sm">
                 <Rocket className="h-4 w-4" /> {primaryLabel}
               </Link>
-              <a href="https://github.com/rayanjainn/duckops" className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl font-semibold text-sm border border-border hover:border-amber-500/40 transition-colors">
+              <a href="https://github.com/rayanjainn/duckops" className="mk-ghost inline-flex items-center gap-2 px-6 py-3.5 rounded-xl font-semibold text-sm">
                 Source on GitHub <ArrowRight className="h-4 w-4" />
               </a>
             </div>
