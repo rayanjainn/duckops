@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { Github, GitBranch, Server, Zap, Activity } from "lucide-react";
+import { useBackendStatus } from "@/lib/useBackendStatus";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4002";
 
@@ -17,6 +18,7 @@ const features = [
 export default function LoginPage() {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
+  const backend = useBackendStatus();
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
@@ -83,9 +85,16 @@ export default function LoginPage() {
           </div>
 
           <div className="space-y-4">
+            {backend === "offline" && (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-500">
+                The DuckOps platform is offline right now, so sign-in won&apos;t work.{" "}
+                <a href="https://github.com/rayanjainn/duckops#getting-started-local" className="underline underline-offset-2">Run it yourself</a> or come back later.
+              </div>
+            )}
             <a
               href={`${API_URL}/api/auth/github`}
-              className="flex items-center justify-center gap-3 w-full bg-white text-slate-900 hover:bg-slate-100 font-semibold py-3 px-4 rounded-xl transition-colors shadow-sm"
+              aria-disabled={backend === "offline"}
+              className={`flex items-center justify-center gap-3 w-full bg-white text-slate-900 hover:bg-slate-100 font-semibold py-3 px-4 rounded-xl transition-colors shadow-sm ${backend === "offline" ? "pointer-events-none opacity-50" : ""}`}
             >
               <Github className="h-5 w-5" />
               Continue with GitHub

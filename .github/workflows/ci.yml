@@ -86,11 +86,14 @@ jobs:
         continue-on-error: true
 
   # ── 4. Deploy backend to EC2 on push to main ───────────────────────────────
+  # The EC2 instance is switched off for now, so this job is skipped unless the
+  # repository variable DEPLOY_BACKEND is set to "true" (Settings → Secrets and
+  # variables → Actions → Variables). The frontend deploy below doesn't need it.
   deploy-backend:
     name: Deploy Backend to EC2
     runs-on: ubuntu-latest
     needs: [lint-and-typecheck, test, validate-infra]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_BACKEND == 'true'
     environment: production
 
     steps:
